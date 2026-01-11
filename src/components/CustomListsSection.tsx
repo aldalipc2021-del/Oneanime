@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -171,6 +172,7 @@ export const CustomListsSection = () => {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Neue Liste erstellen</DialogTitle>
+              <DialogDescription>Erstelle eine neue benutzerdefinierte Animeliste</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <div>

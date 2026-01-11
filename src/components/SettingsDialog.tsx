@@ -3,6 +3,7 @@ import { useTheme } from "next-themes";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -130,6 +131,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Einstellungen</DialogTitle>
+          <DialogDescription>Passe deine Einstellungen an</DialogDescription>
         </DialogHeader>
         
         <div className="space-y-6 py-4">

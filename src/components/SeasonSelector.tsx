@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -125,6 +126,7 @@ export const SeasonSelector = ({
                 </Button>
               )}
             </div>
+            <DialogDescription>Wähle eine Staffel aus, um die Episoden anzuzeigen</DialogDescription>
             {totalSeasonEpisodes > 0 && (
               <p className="text-sm text-muted-foreground">
                 {seasons.length} Staffeln • {totalSeasonEpisodes} Episoden gesamt

@@ -1,6 +1,7 @@
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -77,6 +78,7 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
             <HelpCircle className="h-5 w-5" />
             Hilfe & Häufig gestellte Fragen
           </DialogTitle>
+          <DialogDescription>Antworten auf häufig gestellte Fragen</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
