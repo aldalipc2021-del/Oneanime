@@ -216,7 +216,7 @@ serve(async (req) => {
     if (v1Response.ok) {
       return new Response(
         JSON.stringify({ success: true, message: "Notification sent successfully" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -229,7 +229,7 @@ serve(async (req) => {
         error: "FCM delivery failed",
         details: fcmError
       }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      { status: v1Response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
 
   } catch (error) {
