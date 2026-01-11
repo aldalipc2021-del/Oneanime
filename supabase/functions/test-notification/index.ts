@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { decode, encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { decode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { create, getNumericDate } from "https://deno.land/x/djwt@v2.8/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -18,26 +19,6 @@ async function getAccessToken(): Promise<string | null> {
   }
 
   try {
-    const header = { alg: "RS256", typ: "JWT" };
-    const now = Math.floor(Date.now() / 1000);
-    const payload = {
-      iss: serviceAccountEmail,
-      scope: "https://www.googleapis.com/auth/firebase.messaging",
-      aud: "https://oauth2.googleapis.com/token",
-      iat: now,
-      exp: now + 3600,
-    };
-
-    const encoder = new TextEncoder();
-    const headerB64 = btoa(JSON.stringify(header))
-      .replace(/=/g, "")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_");
-    const payloadB64 = btoa(JSON.stringify(payload))
-      .replace(/=/g, "")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_");
-
     const pemContents = privateKey
       .replace(/\\n/g, "\n")
       .replace(/-----BEGIN PRIVATE KEY-----/, "")
@@ -54,18 +35,16 @@ async function getAccessToken(): Promise<string | null> {
       ["sign"],
     );
 
-    const signature = await crypto.subtle.sign(
-      "RSASSA-PKCS1-v1_5",
-      cryptoKey,
-      encoder.encode(`${headerB64}.${payloadB64}`),
-    );
+    const jwtPayload = {
+      iss: serviceAccountEmail,
+      scope: "https://www.googleapis.com/auth/firebase.messaging",
+      aud: "https://oauth2.googleapis.com/token",
+      iat: getNumericDate(0),
+      exp: getNumericDate(3600), // 1 hour
+    };
+    const jwtHeader = { alg: "RS256", typ: "JWT" };
 
-    const signatureB64 = encode(signature)
-      .replace(/=/g, "")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_");
-
-    const jwt = `${headerB64}.${payloadB64}.${signatureB64}`;
+    const jwt = await create(jwtHeader, jwtPayload, cryptoKey);
 
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -76,7 +55,7 @@ async function getAccessToken(): Promise<string | null> {
     const tokenData = await tokenResponse.json();
     
     if (!tokenData.access_token) {
-      console.log("test-notification: Failed to get access token from Google OAuth");
+      console.log("test-notification: Failed to get access token from Google OAuth", tokenData);
       return null;
     }
     
