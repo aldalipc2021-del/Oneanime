@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { decode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { decode, encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -60,7 +60,7 @@ async function getAccessToken(): Promise<string | null> {
       encoder.encode(`${headerB64}.${payloadB64}`),
     );
 
-    const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+    const signatureB64 = encode(signature)
       .replace(/=/g, "")
       .replace(/\+/g, "-")
       .replace(/\//g, "_");
