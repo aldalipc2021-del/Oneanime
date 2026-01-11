@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { decode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -43,7 +44,7 @@ async function getAccessToken(): Promise<string | null> {
       .replace(/-----END PRIVATE KEY-----/, "")
       .replace(/\s/g, "");
 
-    const binaryKey = Uint8Array.from(atob(pemContents), (c) => c.charCodeAt(0));
+    const binaryKey = decode(pemContents);
 
     const cryptoKey = await crypto.subtle.importKey(
       "pkcs8",
