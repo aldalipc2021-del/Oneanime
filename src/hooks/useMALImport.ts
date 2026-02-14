@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
 import { useToast } from "./use-toast";
 import { TrackingStatus } from "./useTracking";
+import { supabase } from "@/integrations/supabase/client";
 
 interface MALAnimeEntry {
   node: {
@@ -16,8 +17,6 @@ interface MALAnimeEntry {
   list_status: {
     status: "watching" | "completed" | "on_hold" | "dropped" | "plan_to_watch";
     num_episodes_watched: number;
-    start_date?: string;
-    finish_date?: string;
     notes?: string;
   };
 }
@@ -38,41 +37,33 @@ export const useMALImport = () => {
       const username = data.username.trim();
       if (!username) throw new Error("MyAnimeList Benutzername ist erforderlich");
 
-      // Fetch user's anime list from MAL
-      // Using the official MyAnimeList API v2
-      const response = await fetch(
-        `https://api.myanimelist.net/v2/users/${username}/animelist?fields=list_status,node{id,title,main_picture,num_episodes}&limit=1000`,
-        {
-          headers: {
-            "X-MAL-CLIENT-ID": process.env.VITE_MAL_CLIENT_ID || "",
-          },
-        }
-      );
+      // Call our edge function to avoid CORS issues
+      const { data: result, error } = await supabase.functions.invoke("mal-import", {
+        body: { username },
+      });
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("MyAnimeList Benutzer nicht gefunden");
-        }
-        throw new Error("Fehler beim Abrufen der MyAnimeList Daten");
+      if (error) {
+        throw new Error(error.message || "Fehler beim Abrufen der MyAnimeList Daten");
       }
 
-      const result = await response.json();
-      const animeList: MALAnimeEntry[] = result.data || [];
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+
+      const animeList: MALAnimeEntry[] = result?.data || [];
 
       if (animeList.length === 0) {
         throw new Error("Keine Anime in der MyAnimeList Liste gefunden");
       }
 
       // Import anime to Supabase
-      const { supabase } = await import("@/integrations/supabase/client");
-      const importedAnime = [];
-      const errors = [];
+      const importedAnime: string[] = [];
+      const errors: { title: string; reason: string }[] = [];
 
       for (const entry of animeList) {
         try {
           const malStatus = entry.list_status.status;
 
-          // Map MAL status to our tracking status
           let status: TrackingStatus;
           switch (malStatus) {
             case "completed":
@@ -92,8 +83,7 @@ export const useMALImport = () => {
           const anime = entry.node;
           const imageUrl = anime.main_picture?.large || anime.main_picture?.medium;
 
-          // Upsert the anime tracking entry
-          const { error } = await supabase
+          const { error: upsertError } = await supabase
             .from("anime_tracking")
             .upsert(
               {
@@ -111,23 +101,16 @@ export const useMALImport = () => {
               }
             );
 
-          if (error) {
-            errors.push({
-              title: anime.title,
-              reason: error.message,
-            });
+          if (upsertError) {
+            errors.push({ title: anime.title, reason: upsertError.message });
           } else {
             importedAnime.push(anime.title);
           }
         } catch (err) {
-          errors.push({
-            title: entry.node.title,
-            reason: String(err),
-          });
+          errors.push({ title: entry.node.title, reason: String(err) });
         }
       }
 
-      // Invalidate queries to refresh the UI
       queryClient.invalidateQueries({ queryKey: ["trackedAnime"] });
 
       return {
