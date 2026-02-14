@@ -21,48 +21,49 @@ serve(async (req) => {
 
     const trimmed = username.trim();
 
-    // Use Jikan API (public MAL proxy, no API key needed, no CORS issues server-side)
+    // Use MAL's public JSON endpoint (status=7 means all statuses)
     const allAnime: any[] = [];
-    let page = 1;
-    let hasNext = true;
+    let offset = 0;
+    const limit = 300;
 
-    while (hasNext && page <= 10) {
-      const url = `https://api.jikan.moe/v4/users/${encodeURIComponent(trimmed)}/animelist?page=${page}&limit=25`;
-      console.log(`Fetching page ${page}: ${url}`);
+    while (offset < 3000) {
+      const url = `https://myanimelist.net/animelist/${encodeURIComponent(trimmed)}/load.json?status=7&offset=${offset}`;
+      console.log(`Fetching offset ${offset}: ${url}`);
 
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; OneAnime/1.0)",
+        },
+      });
 
       if (!response.ok) {
-        if (response.status === 404) {
-          return new Response(JSON.stringify({ error: `MyAnimeList Benutzer "${trimmed}" nicht gefunden. Bitte überprüfe deinen Benutzernamen auf myanimelist.net` }), {
-            status: 404,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        if (response.status === 429) {
-          // Rate limited - wait and retry
-          console.log("Rate limited, waiting 2s...");
-          await new Promise((r) => setTimeout(r, 2000));
-          continue;
+        if (response.status === 400 || response.status === 404) {
+          if (allAnime.length === 0) {
+            return new Response(
+              JSON.stringify({ error: `MyAnimeList Benutzer "${trimmed}" nicht gefunden oder Anime-Liste ist privat.` }),
+              { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+          break;
         }
         const text = await response.text();
-        console.error(`Jikan API error: ${response.status} - ${text}`);
-        return new Response(JSON.stringify({ error: "Fehler beim Abrufen der MyAnimeList Daten" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        console.error(`MAL API error: ${response.status} - ${text}`);
+        break;
       }
 
-      const result = await response.json();
-      const data = result.data || [];
+      const data = await response.json();
+      if (!Array.isArray(data) || data.length === 0) {
+        break;
+      }
+
       allAnime.push(...data);
+      offset += limit;
 
-      hasNext = result.pagination?.has_next_page === true;
-      page++;
-
-      // Jikan rate limit: ~3 requests/sec
-      if (hasNext) {
-        await new Promise((r) => setTimeout(r, 400));
+      // Small delay to be respectful
+      if (data.length >= limit) {
+        await new Promise((r) => setTimeout(r, 500));
+      } else {
+        break;
       }
     }
 
@@ -71,17 +72,17 @@ serve(async (req) => {
     // Transform to our format
     const animeList = allAnime.map((entry: any) => ({
       node: {
-        id: entry.anime?.mal_id || entry.mal_id,
-        title: entry.anime?.title || entry.title || "Unknown",
+        id: entry.anime_id,
+        title: entry.anime_title_eng || entry.anime_title || "Unknown",
         main_picture: {
-          large: entry.anime?.images?.jpg?.large_image_url,
-          medium: entry.anime?.images?.jpg?.image_url,
+          large: entry.anime_image_path?.replace("/r/192x272/", "/") || null,
+          medium: entry.anime_image_path || null,
         },
-        num_episodes: entry.anime?.episodes || entry.episodes,
+        num_episodes: entry.anime_num_episodes || 0,
       },
       list_status: {
-        status: mapJikanStatus(entry.watching_status || entry.status),
-        num_episodes_watched: entry.episodes_watched || 0,
+        status: mapMALStatus(entry.status),
+        num_episodes_watched: entry.num_watched_episodes || 0,
         notes: entry.notes || "",
       },
     }));
@@ -98,19 +99,14 @@ serve(async (req) => {
   }
 });
 
-function mapJikanStatus(status: number | string): string {
-  // Jikan uses numeric status: 1=watching, 2=completed, 3=on_hold, 4=dropped, 6=plan_to_watch
-  const statusMap: Record<string | number, string> = {
+function mapMALStatus(status: number): string {
+  // MAL status: 1=watching, 2=completed, 3=on_hold, 4=dropped, 6=plan_to_watch
+  const statusMap: Record<number, string> = {
     1: "watching",
     2: "completed",
     3: "on_hold",
     4: "dropped",
     6: "plan_to_watch",
-    watching: "watching",
-    completed: "completed",
-    on_hold: "on_hold",
-    dropped: "dropped",
-    plan_to_watch: "plan_to_watch",
   };
   return statusMap[status] || "watching";
 }
