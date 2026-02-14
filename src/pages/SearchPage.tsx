@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { SearchBar } from "@/components/SearchBar";
 import { AnimeCard } from "@/components/AnimeCard";
 import { Button } from "@/components/ui/button";
-import { useSearchAnime, useGenres, getDisplayTitle } from "@/hooks/useJikanApi";
+import { useSearchAnime, useGenres, getDisplayTitle } from "@/hooks/useAniListApi";
 import { Loader2, Filter, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +29,7 @@ const SearchPage = () => {
   const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState("");
   const [type, setType] = useState("");
-  const [selectedGenres, setSelectedGenres] = useState<number[]>([]);
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
 
   const { data: genresData } = useGenres();
@@ -48,11 +48,11 @@ const SearchPage = () => {
     if (q) setQuery(q);
   }, [searchParams]);
 
-  const toggleGenre = (genreId: number) => {
+  const toggleGenre = (genreName: string) => {
     setSelectedGenres((prev) =>
-      prev.includes(genreId)
-        ? prev.filter((id) => id !== genreId)
-        : [...prev, genreId]
+      prev.includes(genreName)
+        ? prev.filter((g) => g !== genreName)
+        : [...prev, genreName]
     );
   };
 
@@ -147,10 +147,10 @@ const SearchPage = () => {
                 <div className="flex flex-wrap gap-2">
                   {genresData?.slice(0, 20).map((genre: any) => (
                     <Button
-                      key={genre.mal_id}
-                      variant={selectedGenres.includes(genre.mal_id) ? "default" : "outline"}
+                      key={genre.name}
+                      variant={selectedGenres.includes(genre.name) ? "default" : "outline"}
                       size="sm"
-                      onClick={() => toggleGenre(genre.mal_id)}
+                      onClick={() => toggleGenre(genre.name)}
                     >
                       {genre.name}
                     </Button>

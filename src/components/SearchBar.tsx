@@ -8,11 +8,7 @@ import { cn } from "@/lib/utils";
 interface SearchResult {
   mal_id: number;
   title: string;
-  images: {
-    jpg: {
-      image_url: string;
-    };
-  };
+  image: string;
   type: string;
   episodes: number | null;
 }
@@ -22,6 +18,8 @@ interface SearchBarProps {
   size?: "default" | "lg";
   autoFocus?: boolean;
 }
+
+const ANILIST_URL = "https://graphql.anilist.co";
 
 export const SearchBar = ({ className, size = "default", autoFocus = false }: SearchBarProps) => {
   const [query, setQuery] = useState("");
@@ -51,11 +49,39 @@ export const SearchBar = ({ className, size = "default", autoFocus = false }: Se
 
       setIsLoading(true);
       try {
-        const response = await fetch(
-          `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=8&sfw=true`
-        );
+        const gqlQuery = `
+          query ($search: String) {
+            Page(page: 1, perPage: 8) {
+              media(type: ANIME, search: $search, isAdult: false) {
+                id
+                idMal
+                title { romaji english }
+                coverImage { medium }
+                format
+                episodes
+              }
+            }
+          }
+        `;
+
+        const response = await fetch(ANILIST_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: gqlQuery, variables: { search: query } }),
+        });
+
         const data = await response.json();
-        setResults(data.data || []);
+        const media = data.data?.Page?.media || [];
+
+        setResults(
+          media.map((m: any) => ({
+            mal_id: m.idMal || m.id,
+            title: m.title.english || m.title.romaji,
+            image: m.coverImage.medium,
+            type: m.format || "Unknown",
+            episodes: m.episodes,
+          }))
+        );
         setShowResults(true);
       } catch (error) {
         console.error("Search error:", error);
@@ -136,7 +162,7 @@ export const SearchBar = ({ className, size = "default", autoFocus = false }: Se
                 className="flex w-full items-center gap-3 p-3 transition-colors hover:bg-secondary/50"
               >
                 <img
-                  src={anime.images.jpg.image_url}
+                  src={anime.image}
                   alt={anime.title}
                   className="h-16 w-12 rounded-lg object-cover"
                 />

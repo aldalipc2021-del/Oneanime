@@ -44,13 +44,13 @@ export default defineConfig(({ mode }) => ({
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/api\.jikan\.moe\/.*/i,
-            handler: "CacheFirst",
+            urlPattern: /^https:\/\/graphql\.anilist\.co/i,
+            handler: "NetworkFirst",
             options: {
-              cacheName: "jikan-api-cache",
+              cacheName: "anilist-api-cache",
               expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 // 24 hours
+                maxEntries: 200,
+                maxAgeSeconds: 60 * 60 * 24
               }
             }
           }
