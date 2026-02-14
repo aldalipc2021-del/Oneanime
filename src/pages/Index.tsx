@@ -3,7 +3,7 @@ import { SearchBar } from "@/components/SearchBar";
 import { AnimeCard } from "@/components/AnimeCard";
 import { PromoBanner } from "@/components/PromoBanner";
 import { Button } from "@/components/ui/button";
-import { useTopAnime, useSeasonalAnime, getDisplayTitle } from "@/hooks/useJikanApi";
+import { useTopAnime, useSeasonalAnime, getDisplayTitle } from "@/hooks/useAniListApi";
 import { useTrackedAnime } from "@/hooks/useTracking";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2, TrendingUp, Sparkles, Calendar, Filter, ChevronRight } from "lucide-react";

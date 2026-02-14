@@ -4,7 +4,7 @@ import {
   useAnimeById, 
   useAnimeRecommendations,
   getDisplayTitle 
-} from "@/hooks/useJikanApi";
+} from "@/hooks/useAniListApi";
 import { useAnimeSeasons, useAllAnimeEpisodes, calculateTotalEpisodes } from "@/hooks/useAnimeSeasons";
 import { useAuth } from "@/hooks/useAuth";
 import { useTrackingStatus, useAddTracking, useUpdateTracking, TrackingStatus } from "@/hooks/useTracking";
@@ -56,7 +56,11 @@ const AnimeDetailPage = () => {
   
   const { data: recommendations } = useAnimeRecommendations(animeId);
   const { data: tracking, isLoading: trackingLoading } = useTrackingStatus(animeId);
-  const { data: streamingLinks, isLoading: streamingLoading } = useAnimeStreamingLinks(animeId);
+  const { data: streamingLinks, isLoading: streamingLoading } = useAnimeStreamingLinks(
+    animeId,
+    anime?._streamingEpisodes,
+    anime?._externalLinks
+  );
   const { translateText, isTranslating, currentLanguage } = useTranslation();
   
   const [selectedSeasonId, setSelectedSeasonId] = useState<number>(animeId);
@@ -92,7 +96,7 @@ const AnimeDetailPage = () => {
     return calculateTotalEpisodes(seasons);
   }, [seasons]);
 
-  // Load watched episodes from localStorage (for now - can be moved to DB later)
+  // Load watched episodes from localStorage
   useEffect(() => {
     const saved = localStorage.getItem(`watchedEpisodes_${animeId}`);
     if (saved) {
@@ -184,7 +188,6 @@ const AnimeDetailPage = () => {
     setWatchedEpisodes(newWatched);
     localStorage.setItem(`watchedEpisodes_${animeId}`, JSON.stringify(Array.from(newWatched)));
 
-    // Update tracking with new episode count
     const totalWatched = newWatched.size;
     
     if (tracking) {
@@ -203,7 +206,6 @@ const AnimeDetailPage = () => {
         console.error("Failed to update tracking:", error);
       }
     } else {
-      // Auto-add to tracking when first episode is marked
       try {
         await addTracking.mutateAsync({
           animeId,
@@ -308,7 +310,6 @@ const AnimeDetailPage = () => {
 
   const handleSeasonSelect = (seasonId: number, isFilm?: boolean) => {
     setSelectedSeasonId(seasonId);
-    // Navigate to the season's page
     if (seasonId !== animeId) {
       navigate(`/anime/${seasonId}`);
     }
@@ -316,7 +317,6 @@ const AnimeDetailPage = () => {
 
   const currentStatus = tracking?.status;
 
-  // Get season title for episode list
   const getSeasonTitle = () => {
     if (isFilmSelected) {
       const film = films.find(f => f.mal_id === selectedSeasonId);
@@ -326,7 +326,6 @@ const AnimeDetailPage = () => {
     return `Staffel ${selectedSeasonIndex + 1}`;
   };
 
-  // Calculate progress
   const progressWatched = watchedEpisodes.size;
   const progressTotal = totalEpisodesAllSeasons || anime.episodes || 0;
 
@@ -334,7 +333,6 @@ const AnimeDetailPage = () => {
     <div className="min-h-screen pb-12">
       {/* Hero Section with Background */}
       <section className="relative">
-        {/* Background Image */}
         <div className="absolute inset-0 -z-10 h-[500px]">
           <img
             src={anime.images.webp.large_image_url || anime.images.jpg.large_image_url}
@@ -365,7 +363,6 @@ const AnimeDetailPage = () => {
                     </p>
                   </div>
                 )}
-                {/* Progress Badge */}
                 {tracking && progressTotal > 0 && (
                   <div className="absolute top-2 right-2 rounded-lg bg-black/70 px-2 py-1">
                     <span className="text-xs font-bold text-white">
@@ -378,13 +375,11 @@ const AnimeDetailPage = () => {
 
             {/* Info */}
             <div className="flex-1">
-              {/* Title */}
               <h1 className="mb-2 text-3xl font-bold leading-tight md:text-4xl">{title}</h1>
               {anime.title_japanese && (
                 <p className="mb-4 text-lg text-muted-foreground">{anime.title_japanese}</p>
               )}
 
-              {/* Season Selector */}
               <SeasonSelector
                 seasons={seasons}
                 films={films}
@@ -470,7 +465,7 @@ const AnimeDetailPage = () => {
                 </Button>
               </div>
 
-              {/* Progress Display (if tracking) */}
+              {/* Progress Display */}
               {tracking && progressTotal > 0 && (
                 <div className="mb-6 rounded-xl border border-border bg-card p-4">
                   <div className="flex items-center justify-between mb-2">
@@ -559,7 +554,7 @@ const AnimeDetailPage = () => {
         </div>
       </section>
 
-      {/* Notes Section (if tracking) */}
+      {/* Notes Section */}
       {tracking && (
         <section className="mx-auto max-w-7xl px-4 py-4 md:px-6">
           <Button
@@ -607,7 +602,7 @@ const AnimeDetailPage = () => {
         />
       )}
 
-      {/* Film Detail (if film selected) */}
+      {/* Film Detail */}
       {isFilmSelected && selectedSeason && (
         <section className="mx-auto max-w-7xl px-4 py-8 md:px-6">
           <div className="rounded-xl border border-border bg-card p-6">
@@ -635,7 +630,6 @@ const AnimeDetailPage = () => {
       {/* Additional Info */}
       <section className="mx-auto max-w-7xl px-4 py-8 md:px-6">
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {/* Studios */}
           {anime.studios?.length > 0 && (
             <div className="rounded-xl border border-border bg-card p-4">
               <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Studios</h3>
@@ -643,13 +637,11 @@ const AnimeDetailPage = () => {
             </div>
           )}
           
-          {/* Source */}
           <div className="rounded-xl border border-border bg-card p-4">
             <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Quelle</h3>
             <p className="text-foreground">{anime.source || "Original"}</p>
           </div>
           
-          {/* Rating */}
           <div className="rounded-xl border border-border bg-card p-4">
             <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Altersfreigabe</h3>
             <p className="text-foreground">{anime.rating || "Unbekannt"}</p>
@@ -669,7 +661,7 @@ const AnimeDetailPage = () => {
               <AnimeCard
                 key={rec.entry.mal_id}
                 id={rec.entry.mal_id}
-                title={rec.entry.title}
+                title={getDisplayTitle(rec.entry)}
                 image={rec.entry.images.webp.large_image_url || rec.entry.images.jpg.large_image_url}
                 index={index}
               />

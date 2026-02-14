@@ -260,7 +260,7 @@ const legalContent: Record<LegalSection, { title: string; content: JSX.Element }
           <p className="text-muted-foreground">
             Die durch die Seitenbetreiber erstellten Inhalte und Werke auf diesen 
             Seiten unterliegen dem deutschen Urheberrecht. Anime-Bilder und -Daten 
-            stammen von der Jikan API (MyAnimeList) und unterliegen deren jeweiligen 
+            stammen von der AniList API und unterliegen deren jeweiligen 
             Nutzungsbedingungen.
           </p>
         </section>
