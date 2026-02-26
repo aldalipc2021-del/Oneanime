@@ -245,6 +245,15 @@
     background-image: var(--gradient-accent);
   }
 
+  /* Scrollbar Hide */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
   /* Truncate with ellipsis */
   .line-clamp-1 {
     display: -webkit-box;
