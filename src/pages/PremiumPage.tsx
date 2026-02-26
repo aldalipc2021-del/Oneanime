@@ -87,7 +87,7 @@ const PremiumPage = () => {
             Premium Mitgliedschaft
           </div>
           <h1 className="mb-4 text-4xl font-bold md:text-5xl">
-            Erlebe <span className="text-gradient">OneAnime</span> ohne Limits
+            Erlebe <span className="text-gradient-primary">OneAnime</span> ohne Limits
           </h1>
           <p className="mx-auto max-w-xl text-lg text-muted-foreground">
             Unterstütze uns und genieße exklusive Vorteile wie keine Werbung und unbegrenzte Listen.

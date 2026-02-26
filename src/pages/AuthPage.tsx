@@ -173,7 +173,7 @@ const AuthPage = () => {
             <span className="text-2xl font-bold text-primary-foreground">O</span>
           </div>
           <span className="text-2xl font-bold">
-            One<span className="text-gradient">Anime</span>
+            One<span className="text-gradient-primary">Anime</span>
           </span>
         </Link>
 
