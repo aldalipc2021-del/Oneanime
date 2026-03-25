@@ -250,6 +250,56 @@ export type Database = {
         }
         Relationships: []
       }
+      episodes: {
+        Row: {
+          air_date: string | null
+          created_at: string
+          duration_minutes: number | null
+          episode_number: number
+          id: string
+          season_id: string
+          synopsis: string | null
+          thumbnail: string | null
+          title: string | null
+          title_jp: string | null
+          updated_at: string
+        }
+        Insert: {
+          air_date?: string | null
+          created_at?: string
+          duration_minutes?: number | null
+          episode_number: number
+          id?: string
+          season_id: string
+          synopsis?: string | null
+          thumbnail?: string | null
+          title?: string | null
+          title_jp?: string | null
+          updated_at?: string
+        }
+        Update: {
+          air_date?: string | null
+          created_at?: string
+          duration_minutes?: number | null
+          episode_number?: number
+          id?: string
+          season_id?: string
+          synopsis?: string | null
+          thumbnail?: string | null
+          title?: string | null
+          title_jp?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "episodes_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           country: string | null
@@ -286,6 +336,104 @@ export type Database = {
           translate_descriptions?: boolean | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      seasons: {
+        Row: {
+          aired_from: string | null
+          aired_to: string | null
+          anilist_id: number
+          cover_image: string | null
+          created_at: string
+          episode_count: number | null
+          id: string
+          season_number: number
+          series_id: string
+          status: string | null
+          title: string | null
+          trailer_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          aired_from?: string | null
+          aired_to?: string | null
+          anilist_id: number
+          cover_image?: string | null
+          created_at?: string
+          episode_count?: number | null
+          id?: string
+          season_number: number
+          series_id: string
+          status?: string | null
+          title?: string | null
+          trailer_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          aired_from?: string | null
+          aired_to?: string | null
+          anilist_id?: number
+          cover_image?: string | null
+          created_at?: string
+          episode_count?: number | null
+          id?: string
+          season_number?: number
+          series_id?: string
+          status?: string | null
+          title?: string | null
+          trailer_url?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seasons_series_id_fkey"
+            columns: ["series_id"]
+            isOneToOne: false
+            referencedRelation: "series"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      series: {
+        Row: {
+          anilist_id: number
+          cover_image: string | null
+          created_at: string
+          description: string | null
+          genres: string[] | null
+          id: string
+          status: string | null
+          title: string
+          title_en: string | null
+          title_jp: string | null
+          updated_at: string
+        }
+        Insert: {
+          anilist_id: number
+          cover_image?: string | null
+          created_at?: string
+          description?: string | null
+          genres?: string[] | null
+          id?: string
+          status?: string | null
+          title: string
+          title_en?: string | null
+          title_jp?: string | null
+          updated_at?: string
+        }
+        Update: {
+          anilist_id?: number
+          cover_image?: string | null
+          created_at?: string
+          description?: string | null
+          genres?: string[] | null
+          id?: string
+          status?: string | null
+          title?: string
+          title_en?: string | null
+          title_jp?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -327,6 +475,50 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      user_progress: {
+        Row: {
+          created_at: string
+          episodes_watched: number | null
+          id: string
+          notes: string | null
+          rating: number | null
+          season_id: string
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          episodes_watched?: number | null
+          id?: string
+          notes?: string | null
+          rating?: number | null
+          season_id: string
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          episodes_watched?: number | null
+          id?: string
+          notes?: string | null
+          rating?: number | null
+          season_id?: string
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_progress_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {

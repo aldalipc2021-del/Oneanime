@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.test-notification]
 verify_jwt = false
+
+[functions.sync-anime]
+verify_jwt = false
