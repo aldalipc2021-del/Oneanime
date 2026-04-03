@@ -3,9 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { SearchBar } from "@/components/SearchBar";
 import { AnimeCard } from "@/components/AnimeCard";
 import { Button } from "@/components/ui/button";
-import { useSearchAnime, useGenres, getDisplayTitle } from "@/hooks/useAniListApi";
+import { useSearchSeries, useDBGenres, seriesToAnimeCard } from "@/hooks/useAnimeDB";
 import { Loader2, Filter, X } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 const statusOptions = [
   { value: "", label: "Alle Status" },
@@ -14,66 +13,43 @@ const statusOptions = [
   { value: "upcoming", label: "Bald" },
 ];
 
-const typeOptions = [
-  { value: "", label: "Alle Typen" },
-  { value: "tv", label: "TV" },
-  { value: "movie", label: "Film" },
-  { value: "ova", label: "OVA" },
-  { value: "special", label: "Special" },
-];
-
 const SearchPage = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const initialQuery = searchParams.get("q") || "";
   
   const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState("");
-  const [type, setType] = useState("");
-  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  const [selectedGenre, setSelectedGenre] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
-  const { data: genresData } = useGenres();
-  const { data: searchData, isLoading } = useSearchAnime({
-    q: query,
-    status: status || undefined,
-    type: type || undefined,
-    genres: selectedGenres.length > 0 ? selectedGenres.join(",") : undefined,
-    limit: 24,
-    order_by: "score",
-    sort: "desc",
-  });
+  const { data: genresData } = useDBGenres();
+  const { data: searchData, isLoading } = useSearchSeries(
+    query || undefined,
+    selectedGenre || undefined,
+    status || undefined,
+  );
 
   useEffect(() => {
     const q = searchParams.get("q");
     if (q) setQuery(q);
   }, [searchParams]);
 
-  const toggleGenre = (genreName: string) => {
-    setSelectedGenres((prev) =>
-      prev.includes(genreName)
-        ? prev.filter((g) => g !== genreName)
-        : [...prev, genreName]
-    );
-  };
-
   const clearFilters = () => {
     setStatus("");
-    setType("");
-    setSelectedGenres([]);
+    setSelectedGenre("");
   };
 
-  const hasActiveFilters = status || type || selectedGenres.length > 0;
+  const hasActiveFilters = !!status || !!selectedGenre;
+  const results = (searchData || []).map(seriesToAnimeCard);
 
   return (
     <div className="min-h-screen px-4 py-6 md:px-6">
       <div className="mx-auto max-w-7xl">
-        {/* Header */}
         <div className="mb-8">
           <h1 className="mb-4 text-3xl font-bold">Anime Suchen</h1>
           <SearchBar autoFocus className="max-w-2xl" />
         </div>
 
-        {/* Filters Toggle */}
         <div className="mb-6 flex items-center gap-3">
           <Button
             variant={showFilters ? "default" : "outline"}
@@ -83,31 +59,18 @@ const SearchPage = () => {
           >
             <Filter className="h-4 w-4" />
             Filter
-            {hasActiveFilters && (
-              <span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary-foreground text-xs text-primary">
-                {(status ? 1 : 0) + (type ? 1 : 0) + selectedGenres.length}
-              </span>
-            )}
           </Button>
-          
           {hasActiveFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearFilters}
-              className="gap-1 text-muted-foreground"
-            >
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1 text-muted-foreground">
               <X className="h-4 w-4" />
               Filter löschen
             </Button>
           )}
         </div>
 
-        {/* Filters Panel */}
         {showFilters && (
           <div className="mb-8 animate-fade-in rounded-xl border border-border bg-card p-4 md:p-6">
-            <div className="grid gap-6 md:grid-cols-3">
-              {/* Status Filter */}
+            <div className="grid gap-6 md:grid-cols-2">
               <div>
                 <h3 className="mb-3 text-sm font-semibold text-foreground">Status</h3>
                 <div className="flex flex-wrap gap-2">
@@ -123,34 +86,15 @@ const SearchPage = () => {
                   ))}
                 </div>
               </div>
-
-              {/* Type Filter */}
-              <div>
-                <h3 className="mb-3 text-sm font-semibold text-foreground">Typ</h3>
-                <div className="flex flex-wrap gap-2">
-                  {typeOptions.map((option) => (
-                    <Button
-                      key={option.value}
-                      variant={type === option.value ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setType(option.value)}
-                    >
-                      {option.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Genres Filter */}
-              <div className="md:col-span-3">
+              <div className="md:col-span-2">
                 <h3 className="mb-3 text-sm font-semibold text-foreground">Genres</h3>
                 <div className="flex flex-wrap gap-2">
-                  {genresData?.slice(0, 20).map((genre: any) => (
+                  {genresData?.map((genre: any) => (
                     <Button
                       key={genre.name}
-                      variant={selectedGenres.includes(genre.name) ? "default" : "outline"}
+                      variant={selectedGenre === genre.name ? "default" : "outline"}
                       size="sm"
-                      onClick={() => toggleGenre(genre.name)}
+                      onClick={() => setSelectedGenre(selectedGenre === genre.name ? "" : genre.name)}
                     >
                       {genre.name}
                     </Button>
@@ -161,23 +105,20 @@ const SearchPage = () => {
           </div>
         )}
 
-        {/* Results */}
         {isLoading ? (
           <div className="flex h-64 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        ) : searchData?.data?.length > 0 ? (
+        ) : results.length > 0 ? (
           <>
-            <p className="mb-4 text-sm text-muted-foreground">
-              {searchData.pagination?.items?.total || searchData.data.length} Ergebnisse gefunden
-            </p>
+            <p className="mb-4 text-sm text-muted-foreground">{results.length} Ergebnisse</p>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-              {searchData.data.map((anime: any, index: number) => (
+              {results.map((anime, index) => (
                 <AnimeCard
-                  key={anime.mal_id}
-                  id={anime.mal_id}
-                  title={getDisplayTitle(anime)}
-                  image={anime.images.webp.large_image_url || anime.images.jpg.large_image_url}
+                  key={anime.id}
+                  id={anime.id}
+                  title={anime.title}
+                  image={anime.image}
                   score={anime.score}
                   episodes={anime.episodes}
                   status={anime.status}
@@ -189,16 +130,12 @@ const SearchPage = () => {
         ) : query || hasActiveFilters ? (
           <div className="flex h-64 flex-col items-center justify-center text-center">
             <p className="mb-2 text-lg font-medium text-foreground">Keine Ergebnisse gefunden</p>
-            <p className="text-sm text-muted-foreground">
-              Versuche andere Suchbegriffe oder Filter
-            </p>
+            <p className="text-sm text-muted-foreground">Versuche andere Suchbegriffe oder Filter</p>
           </div>
         ) : (
           <div className="flex h-64 flex-col items-center justify-center text-center">
             <p className="mb-2 text-lg font-medium text-foreground">Suche nach Anime</p>
-            <p className="text-sm text-muted-foreground">
-              Gib einen Suchbegriff ein oder nutze die Filter
-            </p>
+            <p className="text-sm text-muted-foreground">Gib einen Suchbegriff ein oder nutze die Filter</p>
           </div>
         )}
       </div>
