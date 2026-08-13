@@ -432,7 +432,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, series_id: seriesId, series_title: seriesTitle, tmdb_id: seriesTmdbId, streaming_providers: providerCount, seasons: seasonResults }),
+      JSON.stringify({ success: true, series_id: seriesId, series_title: seriesTitle, tmdb_id: seriesTmdbId, merged_series: mergedSeries, streaming_providers: providerCount, seasons: seasonResults }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
