@@ -126,48 +126,139 @@ function collectSeries(startMedia: AniListMedia): AniListMedia[] {
   return results;
 }
 
+interface TmdbEpisode {
+  episode_number: number;
+  title: string | null;
+  title_jp: string | null;
+  title_de: string | null;
+  synopsis: string | null;
+  synopsis_de: string | null;
+  air_date: string | null;
+  duration_minutes: number | null;
+  thumbnail: string | null;
+}
+
+const IMG = (path: string | null | undefined, size: string) =>
+  path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
+
+async function tmdbJson(path: string, tmdbKey: string): Promise<any | null> {
+  try {
+    const sep = path.includes("?") ? "&" : "?";
+    const res = await fetch(`${TMDB_BASE}${path}${sep}api_key=${tmdbKey}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+// Resolve a TMDB TV show id from a title (+ optional first air year)
+async function resolveTmdbShowId(title: string, year: number | null, tmdbKey: string): Promise<number | null> {
+  const q = encodeURIComponent(title);
+  const withYear = year ? `&first_air_date_year=${year}` : "";
+  let data = await tmdbJson(`/search/tv?query=${q}&language=en-US${withYear}`, tmdbKey);
+  if (!data?.results?.length && year) {
+    data = await tmdbJson(`/search/tv?query=${q}&language=en-US`, tmdbKey);
+  }
+  return data?.results?.[0]?.id ?? null;
+}
+
+// Details in English + German (images, german title/overview)
+async function tmdbShowInfo(showId: number, tmdbKey: string) {
+  const [en, de] = await Promise.all([
+    tmdbJson(`/tv/${showId}?language=en-US`, tmdbKey),
+    tmdbJson(`/tv/${showId}?language=de-DE`, tmdbKey),
+  ]);
+  return {
+    backdrop_image: IMG(en?.backdrop_path || de?.backdrop_path, "w1280"),
+    poster_image: IMG(en?.poster_path || de?.poster_path, "w500"),
+    title_de: de?.name || null,
+    description_de: de?.overview || null,
+    description_en: en?.overview || null,
+  };
+}
+
+// Watch providers per country (flatrate / rent / buy)
+async function tmdbWatchProviders(showId: number, tmdbKey: string) {
+  const data = await tmdbJson(`/tv/${showId}/watch/providers`, tmdbKey);
+  const rows: Array<{
+    country: string;
+    provider_name: string;
+    provider_id: number | null;
+    logo_url: string | null;
+    offer_type: string;
+    link: string | null;
+    display_priority: number | null;
+  }> = [];
+  const results = data?.results || {};
+  for (const country of Object.keys(results)) {
+    const entry = results[country];
+    for (const offerType of ["flatrate", "rent", "buy", "free", "ads"]) {
+      for (const p of entry?.[offerType] || []) {
+        rows.push({
+          country,
+          provider_name: p.provider_name,
+          provider_id: p.provider_id ?? null,
+          logo_url: IMG(p.logo_path, "w92"),
+          offer_type: offerType,
+          link: entry.link || null,
+          display_priority: p.display_priority ?? null,
+        });
+      }
+    }
+  }
+  // De-duplicate on (country, provider, offer_type)
+  const seen = new Set<string>();
+  return rows.filter((r) => {
+    const k = `${r.country}|${r.provider_name}|${r.offer_type}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
 async function fetchTmdbEpisodes(
-  title: string,
+  showId: number | null,
   seasonNum: number,
   episodeCount: number,
   tmdbKey: string
-): Promise<Array<{ episode_number: number; title: string | null; title_jp: string | null; synopsis: string | null; air_date: string | null; duration_minutes: number | null; thumbnail: string | null }>> {
-  try {
-    // Search TMDB for the show
-    const searchRes = await fetch(`${TMDB_BASE}/search/tv?api_key=${tmdbKey}&query=${encodeURIComponent(title)}&language=en-US`);
-    const searchData = await searchRes.json();
-    if (!searchData.results?.length) return generatePlaceholderEpisodes(episodeCount);
+): Promise<TmdbEpisode[]> {
+  if (!showId) return generatePlaceholderEpisodes(episodeCount);
 
-    const showId = searchData.results[0].id;
+  const [en, de] = await Promise.all([
+    tmdbJson(`/tv/${showId}/season/${seasonNum}?language=en-US`, tmdbKey),
+    tmdbJson(`/tv/${showId}/season/${seasonNum}?language=de-DE`, tmdbKey),
+  ]);
 
-    // Fetch season details
-    const seasonRes = await fetch(`${TMDB_BASE}/tv/${showId}/season/${seasonNum}?api_key=${tmdbKey}&language=en-US`);
-    if (!seasonRes.ok) return generatePlaceholderEpisodes(episodeCount);
-    const seasonData = await seasonRes.json();
+  if (!en?.episodes?.length) return generatePlaceholderEpisodes(episodeCount);
 
-    if (!seasonData.episodes?.length) return generatePlaceholderEpisodes(episodeCount);
+  const deMap = new Map<number, any>();
+  for (const ep of de?.episodes || []) deMap.set(ep.episode_number, ep);
 
-    return seasonData.episodes.map((ep: any) => ({
+  return en.episodes.map((ep: any) => {
+    const deEp = deMap.get(ep.episode_number);
+    return {
       episode_number: ep.episode_number,
       title: ep.name || null,
       title_jp: null,
+      title_de: deEp?.name || null,
       synopsis: ep.overview || null,
+      synopsis_de: deEp?.overview || null,
       air_date: ep.air_date || null,
       duration_minutes: ep.runtime || null,
-      thumbnail: ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : null,
-    }));
-  } catch {
-    return generatePlaceholderEpisodes(episodeCount);
-  }
+      thumbnail: IMG(ep.still_path, "w300"),
+    };
+  });
 }
 
-function generatePlaceholderEpisodes(count: number) {
-  const eps = [];
+function generatePlaceholderEpisodes(count: number): TmdbEpisode[] {
+  const eps: TmdbEpisode[] = [];
   for (let i = 1; i <= (count || 12); i++) {
-    eps.push({ episode_number: i, title: `Episode ${i}`, title_jp: null, synopsis: null, air_date: null, duration_minutes: null, thumbnail: null });
+    eps.push({ episode_number: i, title: `Episode ${i}`, title_jp: null, title_de: null, synopsis: null, synopsis_de: null, air_date: null, duration_minutes: null, thumbnail: null });
   }
   return eps;
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
