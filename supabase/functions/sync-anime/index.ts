@@ -303,7 +303,15 @@ Deno.serve(async (req) => {
     const seriesTitle = first.title.english || first.title.romaji;
     const allGenres = [...new Set(allSeasons.flatMap((s) => s.genres))];
 
-    // 4. Upsert series
+    // 4. Resolve the series on TMDB and pull images / german texts
+    const seriesTmdbId = await resolveTmdbShowId(
+      first.title.english || first.title.romaji,
+      first.startDate?.year ?? null,
+      tmdbKey
+    );
+    const seriesTmdbInfo = seriesTmdbId ? await tmdbShowInfo(seriesTmdbId, tmdbKey) : null;
+
+    // 5. Upsert series
     const { data: seriesRow, error: seriesErr } = await supabase
       .from("series")
       .upsert(
@@ -316,6 +324,11 @@ Deno.serve(async (req) => {
           description: first.description?.replace(/<[^>]*>/g, "") || null,
           genres: allGenres,
           status: first.status?.toLowerCase() || "unknown",
+          tmdb_id: seriesTmdbId,
+          backdrop_image: seriesTmdbInfo?.backdrop_image || null,
+          poster_image: seriesTmdbInfo?.poster_image || null,
+          title_de: seriesTmdbInfo?.title_de || null,
+          description_de: seriesTmdbInfo?.description_de || null,
         },
         { onConflict: "anilist_id" }
       )
@@ -329,10 +342,33 @@ Deno.serve(async (req) => {
     const seriesId = seriesRow.id;
     const seasonResults = [];
 
-    // 5. Upsert each season + episodes
+    // 6. Streaming providers per country from TMDB
+    let providerCount = 0;
+    if (seriesTmdbId) {
+      const providers = await tmdbWatchProviders(seriesTmdbId, tmdbKey);
+      if (providers.length > 0) {
+        const { error: provErr } = await supabase
+          .from("streaming_providers")
+          .upsert(
+            providers.map((p) => ({ series_id: seriesId, ...p })),
+            { onConflict: "series_id,country,provider_name,offer_type" }
+          );
+        if (!provErr) providerCount = providers.length;
+      }
+    }
+
+    // 7. Upsert each season + episodes
     for (let i = 0; i < allSeasons.length; i++) {
       const s = allSeasons[i];
       const seasonNumber = i + 1;
+
+      // Resolve this season on TMDB (own show entry or a season of the series show)
+      const seasonTmdbId =
+        (await resolveTmdbShowId(s.title.english || s.title.romaji, s.startDate?.year ?? null, tmdbKey)) ??
+        seriesTmdbId;
+      const isOwnShow = !!seasonTmdbId && seasonTmdbId !== seriesTmdbId;
+      const tmdbSeasonNumber = isOwnShow ? 1 : seasonNumber;
+      const seasonTmdbInfo = seasonTmdbId ? await tmdbShowInfo(seasonTmdbId, tmdbKey) : null;
 
       const { data: seasonRow, error: seasonErr } = await supabase
         .from("seasons")
@@ -348,6 +384,10 @@ Deno.serve(async (req) => {
             cover_image: s.coverImage?.extraLarge || s.coverImage?.large || null,
             trailer_url: trailerUrl(s.trailer),
             status: s.status?.toLowerCase() || "unknown",
+            tmdb_id: seasonTmdbId,
+            backdrop_image: seasonTmdbInfo?.backdrop_image || null,
+            title_de: seasonTmdbInfo?.title_de || null,
+            description_de: seasonTmdbInfo?.description_de || null,
           },
           { onConflict: "anilist_id" }
         )
@@ -359,9 +399,8 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Fetch episodes from TMDB
-      const searchTitle = s.title.romaji || s.title.english || seriesTitle;
-      const tmdbEpisodes = await fetchTmdbEpisodes(searchTitle, seasonNumber, s.episodes || 12, tmdbKey);
+      // Fetch episodes from TMDB (english + german)
+      const tmdbEpisodes = await fetchTmdbEpisodes(seasonTmdbId, tmdbSeasonNumber, s.episodes || 12, tmdbKey);
 
       // Upsert episodes
       const episodeRows = tmdbEpisodes.map((ep) => ({
@@ -369,7 +408,9 @@ Deno.serve(async (req) => {
         episode_number: ep.episode_number,
         title: ep.title,
         title_jp: ep.title_jp,
+        title_de: ep.title_de,
         synopsis: ep.synopsis,
+        synopsis_de: ep.synopsis_de,
         air_date: ep.air_date,
         duration_minutes: ep.duration_minutes,
         thumbnail: ep.thumbnail,
@@ -383,15 +424,16 @@ Deno.serve(async (req) => {
         if (epErr) {
           seasonResults.push({ anilist_id: s.id, season_number: seasonNumber, episodes_error: epErr.message });
         } else {
-          seasonResults.push({ anilist_id: s.id, season_number: seasonNumber, episodes: episodeRows.length });
+          seasonResults.push({ anilist_id: s.id, season_number: seasonNumber, tmdb_id: seasonTmdbId, episodes: episodeRows.length });
         }
       }
     }
 
     return new Response(
-      JSON.stringify({ success: true, series_id: seriesId, series_title: seriesTitle, seasons: seasonResults }),
+      JSON.stringify({ success: true, series_id: seriesId, series_title: seriesTitle, tmdb_id: seriesTmdbId, streaming_providers: providerCount, seasons: seasonResults }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
