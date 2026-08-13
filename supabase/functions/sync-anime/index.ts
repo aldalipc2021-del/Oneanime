@@ -43,41 +43,29 @@ query ($id: Int) {
     relations {
       edges {
         relationType
-        node {
-          id
-          title { romaji english native }
-          coverImage { extraLarge large }
-          description
-          genres
-          status
-          format
-          episodes
-          startDate { year month day }
-          endDate { year month day }
-          trailer { site id }
-          relations {
-            edges {
-              relationType
-              node {
-                id
-                title { romaji english native }
-                coverImage { extraLarge large }
-                description
-                genres
-                status
-                format
-                episodes
-                startDate { year month day }
-                endDate { year month day }
-                trailer { site id }
-              }
-            }
-          }
-        }
+        node { id format }
       }
     }
   }
 }`;
+
+async function fetchAniListMedia(id: number): Promise<AniListMedia | null> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(ANILIST_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: ANILIST_QUERY, variables: { id } }),
+    });
+    if (res.status === 429) {
+      await new Promise((r) => setTimeout(r, 2000));
+      continue;
+    }
+    const json = await res.json();
+    return json?.data?.Media ?? null;
+  }
+  return null;
+}
+
 
 function dateFromAniList(d: { year: number | null; month: number | null; day: number | null } | null): string | null {
   if (!d || !d.year) return null;
