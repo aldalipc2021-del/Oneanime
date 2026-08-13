@@ -80,27 +80,27 @@ function trailerUrl(t: { site: string; id: string } | null): string | null {
   return null;
 }
 
-// BFS to collect all sequel/prequel TV entries
-function collectSeries(startMedia: AniListMedia): AniListMedia[] {
-  const visited = new Set<number>();
+// BFS across the whole sequel/prequel chain (fetches every node from AniList)
+async function collectSeries(startMedia: AniListMedia): Promise<AniListMedia[]> {
+  const visited = new Set<number>([startMedia.id]);
   const queue: AniListMedia[] = [startMedia];
   const results: AniListMedia[] = [];
+  const MAX_NODES = 40;
 
-  while (queue.length > 0) {
+  while (queue.length > 0 && visited.size <= MAX_NODES) {
     const current = queue.shift()!;
-    if (visited.has(current.id)) continue;
-    visited.add(current.id);
 
     if (["TV", "ONA", "TV_SHORT"].includes(current.format)) {
       results.push(current);
     }
 
-    if (current.relations?.edges) {
-      for (const edge of current.relations.edges) {
-        if (["SEQUEL", "PREQUEL"].includes(edge.relationType) && !visited.has(edge.node.id)) {
-          queue.push(edge.node);
-        }
-      }
+    for (const edge of current.relations?.edges ?? []) {
+      if (!["SEQUEL", "PREQUEL"].includes(edge.relationType)) continue;
+      if (visited.has(edge.node.id)) continue;
+      if (!["TV", "ONA", "TV_SHORT"].includes(edge.node.format)) continue;
+      visited.add(edge.node.id);
+      const full = await fetchAniListMedia(edge.node.id);
+      if (full) queue.push(full);
     }
   }
 
@@ -113,6 +113,7 @@ function collectSeries(startMedia: AniListMedia): AniListMedia[] {
 
   return results;
 }
+
 
 interface TmdbEpisode {
   episode_number: number;
