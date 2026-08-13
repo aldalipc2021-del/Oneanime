@@ -326,6 +326,24 @@ Deno.serve(async (req) => {
     const seriesId = seriesRow.id;
     const seasonResults = [];
 
+    // 5b. Merge duplicate series rows that belong to this same chain
+    const chainIds = allSeasons.map((s) => s.id);
+    const { data: dupSeries } = await supabase
+      .from("series")
+      .select("id")
+      .in("anilist_id", chainIds)
+      .neq("id", seriesId);
+
+    let mergedSeries = 0;
+    if (dupSeries && dupSeries.length > 0) {
+      const dupIds = dupSeries.map((d: { id: string }) => d.id);
+      await supabase.from("seasons").update({ series_id: seriesId }).in("series_id", dupIds);
+      await supabase.from("streaming_providers").delete().in("series_id", dupIds);
+      await supabase.from("series").delete().in("id", dupIds);
+      mergedSeries = dupIds.length;
+    }
+
+
     // 6. Streaming providers per country from TMDB
     let providerCount = 0;
     if (seriesTmdbId) {
