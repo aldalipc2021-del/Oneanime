@@ -270,22 +270,17 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // 1. Fetch from AniList
-    const aniRes = await fetch(ANILIST_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: ANILIST_QUERY, variables: { id: anilist_id } }),
-    });
-    const aniData = await aniRes.json();
-    const startMedia = aniData?.data?.Media;
+    const startMedia = await fetchAniListMedia(anilist_id);
     if (!startMedia) {
       return new Response(JSON.stringify({ error: "Anime not found on AniList" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // 2. Collect all related seasons via BFS
-    const allSeasons = collectSeries(startMedia);
+    const allSeasons = await collectSeries(startMedia);
     if (allSeasons.length === 0) {
       return new Response(JSON.stringify({ error: "No TV seasons found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
 
     // 3. Use the first season as the "series" identity
     const first = allSeasons[0];
