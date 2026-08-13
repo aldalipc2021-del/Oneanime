@@ -259,8 +259,10 @@ export type Database = {
           id: string
           season_id: string
           synopsis: string | null
+          synopsis_de: string | null
           thumbnail: string | null
           title: string | null
+          title_de: string | null
           title_jp: string | null
           updated_at: string
         }
@@ -272,8 +274,10 @@ export type Database = {
           id?: string
           season_id: string
           synopsis?: string | null
+          synopsis_de?: string | null
           thumbnail?: string | null
           title?: string | null
+          title_de?: string | null
           title_jp?: string | null
           updated_at?: string
         }
@@ -285,8 +289,10 @@ export type Database = {
           id?: string
           season_id?: string
           synopsis?: string | null
+          synopsis_de?: string | null
           thumbnail?: string | null
           title?: string | null
+          title_de?: string | null
           title_jp?: string | null
           updated_at?: string
         }
@@ -344,14 +350,18 @@ export type Database = {
           aired_from: string | null
           aired_to: string | null
           anilist_id: number
+          backdrop_image: string | null
           cover_image: string | null
           created_at: string
+          description_de: string | null
           episode_count: number | null
           id: string
           season_number: number
           series_id: string
           status: string | null
           title: string | null
+          title_de: string | null
+          tmdb_id: number | null
           trailer_url: string | null
           updated_at: string
         }
@@ -359,14 +369,18 @@ export type Database = {
           aired_from?: string | null
           aired_to?: string | null
           anilist_id: number
+          backdrop_image?: string | null
           cover_image?: string | null
           created_at?: string
+          description_de?: string | null
           episode_count?: number | null
           id?: string
           season_number: number
           series_id: string
           status?: string | null
           title?: string | null
+          title_de?: string | null
+          tmdb_id?: number | null
           trailer_url?: string | null
           updated_at?: string
         }
@@ -374,14 +388,18 @@ export type Database = {
           aired_from?: string | null
           aired_to?: string | null
           anilist_id?: number
+          backdrop_image?: string | null
           cover_image?: string | null
           created_at?: string
+          description_de?: string | null
           episode_count?: number | null
           id?: string
           season_number?: number
           series_id?: string
           status?: string | null
           title?: string | null
+          title_de?: string | null
+          tmdb_id?: number | null
           trailer_url?: string | null
           updated_at?: string
         }
@@ -398,44 +416,109 @@ export type Database = {
       series: {
         Row: {
           anilist_id: number
+          backdrop_image: string | null
           cover_image: string | null
           created_at: string
           description: string | null
+          description_de: string | null
           genres: string[] | null
           id: string
+          poster_image: string | null
           status: string | null
           title: string
+          title_de: string | null
           title_en: string | null
           title_jp: string | null
+          tmdb_id: number | null
           updated_at: string
         }
         Insert: {
           anilist_id: number
+          backdrop_image?: string | null
           cover_image?: string | null
           created_at?: string
           description?: string | null
+          description_de?: string | null
           genres?: string[] | null
           id?: string
+          poster_image?: string | null
           status?: string | null
           title: string
+          title_de?: string | null
           title_en?: string | null
           title_jp?: string | null
+          tmdb_id?: number | null
           updated_at?: string
         }
         Update: {
           anilist_id?: number
+          backdrop_image?: string | null
           cover_image?: string | null
           created_at?: string
           description?: string | null
+          description_de?: string | null
           genres?: string[] | null
           id?: string
+          poster_image?: string | null
           status?: string | null
           title?: string
+          title_de?: string | null
           title_en?: string | null
           title_jp?: string | null
+          tmdb_id?: number | null
           updated_at?: string
         }
         Relationships: []
+      }
+      streaming_providers: {
+        Row: {
+          country: string
+          created_at: string
+          display_priority: number | null
+          id: string
+          link: string | null
+          logo_url: string | null
+          offer_type: string
+          provider_id: number | null
+          provider_name: string
+          series_id: string
+          updated_at: string
+        }
+        Insert: {
+          country: string
+          created_at?: string
+          display_priority?: number | null
+          id?: string
+          link?: string | null
+          logo_url?: string | null
+          offer_type?: string
+          provider_id?: number | null
+          provider_name: string
+          series_id: string
+          updated_at?: string
+        }
+        Update: {
+          country?: string
+          created_at?: string
+          display_priority?: number | null
+          id?: string
+          link?: string | null
+          logo_url?: string | null
+          offer_type?: string
+          provider_id?: number | null
+          provider_name?: string
+          series_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "streaming_providers_series_id_fkey"
+            columns: ["series_id"]
+            isOneToOne: false
+            referencedRelation: "series"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subscriptions: {
         Row: {
