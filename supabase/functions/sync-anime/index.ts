@@ -43,41 +43,29 @@ query ($id: Int) {
     relations {
       edges {
         relationType
-        node {
-          id
-          title { romaji english native }
-          coverImage { extraLarge large }
-          description
-          genres
-          status
-          format
-          episodes
-          startDate { year month day }
-          endDate { year month day }
-          trailer { site id }
-          relations {
-            edges {
-              relationType
-              node {
-                id
-                title { romaji english native }
-                coverImage { extraLarge large }
-                description
-                genres
-                status
-                format
-                episodes
-                startDate { year month day }
-                endDate { year month day }
-                trailer { site id }
-              }
-            }
-          }
-        }
+        node { id format }
       }
     }
   }
 }`;
+
+async function fetchAniListMedia(id: number): Promise<AniListMedia | null> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(ANILIST_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: ANILIST_QUERY, variables: { id } }),
+    });
+    if (res.status === 429) {
+      await new Promise((r) => setTimeout(r, 2000));
+      continue;
+    }
+    const json = await res.json();
+    return json?.data?.Media ?? null;
+  }
+  return null;
+}
+
 
 function dateFromAniList(d: { year: number | null; month: number | null; day: number | null } | null): string | null {
   if (!d || !d.year) return null;
@@ -92,27 +80,27 @@ function trailerUrl(t: { site: string; id: string } | null): string | null {
   return null;
 }
 
-// BFS to collect all sequel/prequel TV entries
-function collectSeries(startMedia: AniListMedia): AniListMedia[] {
-  const visited = new Set<number>();
+// BFS across the whole sequel/prequel chain (fetches every node from AniList)
+async function collectSeries(startMedia: AniListMedia): Promise<AniListMedia[]> {
+  const visited = new Set<number>([startMedia.id]);
   const queue: AniListMedia[] = [startMedia];
   const results: AniListMedia[] = [];
+  const MAX_NODES = 40;
 
-  while (queue.length > 0) {
+  while (queue.length > 0 && visited.size <= MAX_NODES) {
     const current = queue.shift()!;
-    if (visited.has(current.id)) continue;
-    visited.add(current.id);
 
     if (["TV", "ONA", "TV_SHORT"].includes(current.format)) {
       results.push(current);
     }
 
-    if (current.relations?.edges) {
-      for (const edge of current.relations.edges) {
-        if (["SEQUEL", "PREQUEL"].includes(edge.relationType) && !visited.has(edge.node.id)) {
-          queue.push(edge.node);
-        }
-      }
+    for (const edge of current.relations?.edges ?? []) {
+      if (!["SEQUEL", "PREQUEL"].includes(edge.relationType)) continue;
+      if (visited.has(edge.node.id)) continue;
+      if (!["TV", "ONA", "TV_SHORT"].includes(edge.node.format)) continue;
+      visited.add(edge.node.id);
+      const full = await fetchAniListMedia(edge.node.id);
+      if (full) queue.push(full);
     }
   }
 
@@ -125,6 +113,7 @@ function collectSeries(startMedia: AniListMedia): AniListMedia[] {
 
   return results;
 }
+
 
 interface TmdbEpisode {
   episode_number: number;
@@ -281,22 +270,17 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // 1. Fetch from AniList
-    const aniRes = await fetch(ANILIST_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: ANILIST_QUERY, variables: { id: anilist_id } }),
-    });
-    const aniData = await aniRes.json();
-    const startMedia = aniData?.data?.Media;
+    const startMedia = await fetchAniListMedia(anilist_id);
     if (!startMedia) {
       return new Response(JSON.stringify({ error: "Anime not found on AniList" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // 2. Collect all related seasons via BFS
-    const allSeasons = collectSeries(startMedia);
+    const allSeasons = await collectSeries(startMedia);
     if (allSeasons.length === 0) {
       return new Response(JSON.stringify({ error: "No TV seasons found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
 
     // 3. Use the first season as the "series" identity
     const first = allSeasons[0];
@@ -341,6 +325,24 @@ Deno.serve(async (req) => {
 
     const seriesId = seriesRow.id;
     const seasonResults = [];
+
+    // 5b. Merge duplicate series rows that belong to this same chain
+    const chainIds = allSeasons.map((s) => s.id);
+    const { data: dupSeries } = await supabase
+      .from("series")
+      .select("id")
+      .in("anilist_id", chainIds)
+      .neq("id", seriesId);
+
+    let mergedSeries = 0;
+    if (dupSeries && dupSeries.length > 0) {
+      const dupIds = dupSeries.map((d: { id: string }) => d.id);
+      await supabase.from("seasons").update({ series_id: seriesId }).in("series_id", dupIds);
+      await supabase.from("streaming_providers").delete().in("series_id", dupIds);
+      await supabase.from("series").delete().in("id", dupIds);
+      mergedSeries = dupIds.length;
+    }
+
 
     // 6. Streaming providers per country from TMDB
     let providerCount = 0;
@@ -430,7 +432,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, series_id: seriesId, series_title: seriesTitle, tmdb_id: seriesTmdbId, streaming_providers: providerCount, seasons: seasonResults }),
+      JSON.stringify({ success: true, series_id: seriesId, series_title: seriesTitle, tmdb_id: seriesTmdbId, merged_series: mergedSeries, streaming_providers: providerCount, seasons: seasonResults }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
