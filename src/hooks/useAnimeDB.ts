@@ -83,7 +83,9 @@ export const useAllSeries = (filter?: string) => {
         query = query.eq("status", "finished");
       }
       
-      const { data, error } = await query.order("title", { ascending: true });
+      const { data, error } = await query
+        .order("popularity", { ascending: false, nullsFirst: false })
+        .limit(200);
       if (error) throw error;
       return data as DBSeries[];
     },
