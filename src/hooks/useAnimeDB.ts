@@ -110,7 +110,9 @@ export const useSearchSeries = (searchQuery?: string, genre?: string, status?: s
       else if (status === "complete") query = query.eq("status", "finished");
       else if (status === "upcoming") query = query.eq("status", "not_yet_released");
       
-      const { data, error } = await query.order("title").limit(50);
+      const { data, error } = await query
+        .order("popularity", { ascending: false, nullsFirst: false })
+        .limit(60);
       if (error) throw error;
       return data as DBSeries[];
     },
