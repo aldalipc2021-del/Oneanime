@@ -421,8 +421,12 @@ export type Database = {
           created_at: string
           description: string | null
           description_de: string | null
+          detail_synced_at: string | null
+          episode_count: number | null
+          format: string | null
           genres: string[] | null
           id: string
+          popularity: number | null
           poster_image: string | null
           status: string | null
           title: string
@@ -431,6 +435,7 @@ export type Database = {
           title_jp: string | null
           tmdb_id: number | null
           updated_at: string
+          year: number | null
         }
         Insert: {
           anilist_id: number
@@ -439,8 +444,12 @@ export type Database = {
           created_at?: string
           description?: string | null
           description_de?: string | null
+          detail_synced_at?: string | null
+          episode_count?: number | null
+          format?: string | null
           genres?: string[] | null
           id?: string
+          popularity?: number | null
           poster_image?: string | null
           status?: string | null
           title: string
@@ -449,6 +458,7 @@ export type Database = {
           title_jp?: string | null
           tmdb_id?: number | null
           updated_at?: string
+          year?: number | null
         }
         Update: {
           anilist_id?: number
@@ -457,8 +467,12 @@ export type Database = {
           created_at?: string
           description?: string | null
           description_de?: string | null
+          detail_synced_at?: string | null
+          episode_count?: number | null
+          format?: string | null
           genres?: string[] | null
           id?: string
+          popularity?: number | null
           poster_image?: string | null
           status?: string | null
           title?: string
@@ -467,6 +481,7 @@ export type Database = {
           title_jp?: string | null
           tmdb_id?: number | null
           updated_at?: string
+          year?: number | null
         }
         Relationships: []
       }
@@ -556,6 +571,39 @@ export type Database = {
           stripe_subscription_id?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      sync_state: {
+        Row: {
+          created_at: string
+          id: string
+          job_name: string
+          last_error: string | null
+          last_page: number
+          status: string
+          total_items: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          job_name: string
+          last_error?: string | null
+          last_page?: number
+          status?: string
+          total_items?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          job_name?: string
+          last_error?: string | null
+          last_page?: number
+          status?: string
+          total_items?: number
+          updated_at?: string
         }
         Relationships: []
       }

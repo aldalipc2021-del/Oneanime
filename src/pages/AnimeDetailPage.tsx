@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { useSeriesByAnilistId, useDBSeasons, useDBEpisodes, getDisplayTitle } from "@/hooks/useAnimeDB";
+import { useSeriesByAnilistId, useDBSeasons, useDBEpisodes, getDisplayTitle, useEnsureDetailSync } from "@/hooks/useAnimeDB";
 import { useAuth } from "@/hooks/useAuth";
 import { useTrackingStatus, useAddTracking, useUpdateTracking, TrackingStatus } from "@/hooks/useTracking";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -23,6 +23,12 @@ const AnimeDetailPage = () => {
   const { user, profile } = useAuth();
   const { data: series, isLoading: seriesLoading } = useSeriesByAnilistId(animeId);
   const { data: seasons, isLoading: seasonsLoading } = useDBSeasons(series?.id);
+  const { isSyncing: detailSyncing } = useEnsureDetailSync(
+    animeId,
+    series?.id,
+    !!seasons && seasons.length > 0,
+    !!series && !seasonsLoading,
+  );
   
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
   const { data: episodes, isLoading: episodesLoading } = useDBEpisodes(selectedSeasonId || undefined);
@@ -178,6 +184,14 @@ const AnimeDetailPage = () => {
             <div className="flex-1">
               <h1 className="mb-2 text-3xl font-bold leading-tight md:text-4xl">{title}</h1>
               {series.title_jp && <p className="mb-4 text-lg text-muted-foreground">{series.title_jp}</p>}
+
+              {/* Detail sync in progress */}
+              {detailSyncing && (!seasons || seasons.length === 0) && (
+                <div className="mb-6 flex items-center gap-2 rounded-lg border border-border bg-card/50 px-4 py-3 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  Staffeln und Episoden werden geladen …
+                </div>
+              )}
 
               {/* Season Selector */}
               {seasons && seasons.length > 0 && (

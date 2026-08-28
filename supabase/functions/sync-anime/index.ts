@@ -278,7 +278,8 @@ Deno.serve(async (req) => {
     // 2. Collect all related seasons via BFS
     const allSeasons = await collectSeries(startMedia);
     if (allSeasons.length === 0) {
-      return new Response(JSON.stringify({ error: "No TV seasons found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // Movies, OVAs and specials have no TV chain — treat the entry itself as a single season
+      allSeasons.push(startMedia);
     }
 
 
@@ -313,6 +314,10 @@ Deno.serve(async (req) => {
           poster_image: seriesTmdbInfo?.poster_image || null,
           title_de: seriesTmdbInfo?.title_de || null,
           description_de: seriesTmdbInfo?.description_de || null,
+          format: first.format || null,
+          year: first.startDate?.year ?? null,
+          episode_count: allSeasons.reduce((sum, s) => sum + (s.episodes || 0), 0) || null,
+          detail_synced_at: new Date().toISOString(),
         },
         { onConflict: "anilist_id" }
       )

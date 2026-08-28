@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface DBSeries {
@@ -11,6 +12,11 @@ export interface DBSeries {
   description: string | null;
   genres: string[] | null;
   status: string | null;
+  format?: string | null;
+  year?: number | null;
+  episode_count?: number | null;
+  popularity?: number | null;
+  detail_synced_at?: string | null;
 }
 
 export interface DBSeason {
@@ -77,7 +83,9 @@ export const useAllSeries = (filter?: string) => {
         query = query.eq("status", "finished");
       }
       
-      const { data, error } = await query.order("title", { ascending: true });
+      const { data, error } = await query
+        .order("popularity", { ascending: false, nullsFirst: false })
+        .limit(200);
       if (error) throw error;
       return data as DBSeries[];
     },
@@ -102,7 +110,9 @@ export const useSearchSeries = (searchQuery?: string, genre?: string, status?: s
       else if (status === "complete") query = query.eq("status", "finished");
       else if (status === "upcoming") query = query.eq("status", "not_yet_released");
       
-      const { data, error } = await query.order("title").limit(50);
+      const { data, error } = await query
+        .order("popularity", { ascending: false, nullsFirst: false })
+        .limit(60);
       if (error) throw error;
       return data as DBSeries[];
     },
@@ -205,3 +215,52 @@ export const useDBGenres = () => {
 export const getDisplayTitle = (item: { title_en?: string | null; title?: string; title_english?: string | null }) => {
   return item.title_en || item.title_english || item.title || "";
 };
+
+// On-demand detail sync: catalog entries have no seasons/episodes yet.
+// When a detail page is opened without seasons, trigger the backend sync once.
+export const useEnsureDetailSync = (
+  anilistId: number | undefined,
+  seriesId: string | undefined,
+  hasSeasons: boolean,
+  ready: boolean,
+) => {
+  const queryClient = useQueryClient();
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const attempted = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!ready || !anilistId || hasSeasons) return;
+    if (attempted.current.has(anilistId)) return;
+    attempted.current.add(anilistId);
+
+    let cancelled = false;
+    setIsSyncing(true);
+    setFailed(false);
+
+    supabase.functions
+      .invoke("sync-anime", { body: { anilist_id: anilistId } })
+      .then(({ error }) => {
+        if (cancelled) return;
+        if (error) {
+          setFailed(true);
+          return;
+        }
+        queryClient.invalidateQueries({ queryKey: ["dbSeriesById", anilistId] });
+        queryClient.invalidateQueries({ queryKey: ["dbSeasons"] });
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setIsSyncing(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [anilistId, seriesId, hasSeasons, ready, queryClient]);
+
+  return { isSyncing, failed };
+};
+
