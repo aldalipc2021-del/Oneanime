@@ -185,6 +185,14 @@ const AnimeDetailPage = () => {
               <h1 className="mb-2 text-3xl font-bold leading-tight md:text-4xl">{title}</h1>
               {series.title_jp && <p className="mb-4 text-lg text-muted-foreground">{series.title_jp}</p>}
 
+              {/* Detail sync in progress */}
+              {detailSyncing && (!seasons || seasons.length === 0) && (
+                <div className="mb-6 flex items-center gap-2 rounded-lg border border-border bg-card/50 px-4 py-3 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  Staffeln und Episoden werden geladen …
+                </div>
+              )}
+
               {/* Season Selector */}
               {seasons && seasons.length > 0 && (
                 <div className="mb-6">
