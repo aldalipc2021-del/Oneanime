@@ -12,6 +12,11 @@ export interface DBSeries {
   description: string | null;
   genres: string[] | null;
   status: string | null;
+  format?: string | null;
+  year?: number | null;
+  episode_count?: number | null;
+  popularity?: number | null;
+  detail_synced_at?: string | null;
 }
 
 export interface DBSeason {
