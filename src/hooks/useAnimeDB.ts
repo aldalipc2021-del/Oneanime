@@ -215,3 +215,52 @@ export const useDBGenres = () => {
 export const getDisplayTitle = (item: { title_en?: string | null; title?: string; title_english?: string | null }) => {
   return item.title_en || item.title_english || item.title || "";
 };
+
+// On-demand detail sync: catalog entries have no seasons/episodes yet.
+// When a detail page is opened without seasons, trigger the backend sync once.
+export const useEnsureDetailSync = (
+  anilistId: number | undefined,
+  seriesId: string | undefined,
+  hasSeasons: boolean,
+  ready: boolean,
+) => {
+  const queryClient = useQueryClient();
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const attempted = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!ready || !anilistId || hasSeasons) return;
+    if (attempted.current.has(anilistId)) return;
+    attempted.current.add(anilistId);
+
+    let cancelled = false;
+    setIsSyncing(true);
+    setFailed(false);
+
+    supabase.functions
+      .invoke("sync-anime", { body: { anilist_id: anilistId } })
+      .then(({ error }) => {
+        if (cancelled) return;
+        if (error) {
+          setFailed(true);
+          return;
+        }
+        queryClient.invalidateQueries({ queryKey: ["dbSeriesById", anilistId] });
+        queryClient.invalidateQueries({ queryKey: ["dbSeasons"] });
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setIsSyncing(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [anilistId, seriesId, hasSeasons, ready, queryClient]);
+
+  return { isSyncing, failed };
+};
+
