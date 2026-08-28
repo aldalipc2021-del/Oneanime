@@ -314,6 +314,10 @@ Deno.serve(async (req) => {
           poster_image: seriesTmdbInfo?.poster_image || null,
           title_de: seriesTmdbInfo?.title_de || null,
           description_de: seriesTmdbInfo?.description_de || null,
+          format: first.format || null,
+          year: first.startDate?.year ?? null,
+          episode_count: allSeasons.reduce((sum, s) => sum + (s.episodes || 0), 0) || null,
+          detail_synced_at: new Date().toISOString(),
         },
         { onConflict: "anilist_id" }
       )
