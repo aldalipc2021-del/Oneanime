@@ -23,6 +23,12 @@ const AnimeDetailPage = () => {
   const { user, profile } = useAuth();
   const { data: series, isLoading: seriesLoading } = useSeriesByAnilistId(animeId);
   const { data: seasons, isLoading: seasonsLoading } = useDBSeasons(series?.id);
+  const { isSyncing: detailSyncing } = useEnsureDetailSync(
+    animeId,
+    series?.id,
+    !!seasons && seasons.length > 0,
+    !!series && !seasonsLoading,
+  );
   
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
   const { data: episodes, isLoading: episodesLoading } = useDBEpisodes(selectedSeasonId || undefined);
