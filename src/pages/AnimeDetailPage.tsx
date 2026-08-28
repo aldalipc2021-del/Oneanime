@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { useSeriesByAnilistId, useDBSeasons, useDBEpisodes, getDisplayTitle } from "@/hooks/useAnimeDB";
+import { useSeriesByAnilistId, useDBSeasons, useDBEpisodes, getDisplayTitle, useEnsureDetailSync } from "@/hooks/useAnimeDB";
 import { useAuth } from "@/hooks/useAuth";
 import { useTrackingStatus, useAddTracking, useUpdateTracking, TrackingStatus } from "@/hooks/useTracking";
 import { useTranslation } from "@/hooks/useTranslation";
