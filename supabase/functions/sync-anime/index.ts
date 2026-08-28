@@ -278,7 +278,8 @@ Deno.serve(async (req) => {
     // 2. Collect all related seasons via BFS
     const allSeasons = await collectSeries(startMedia);
     if (allSeasons.length === 0) {
-      return new Response(JSON.stringify({ error: "No TV seasons found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // Movies, OVAs and specials have no TV chain — treat the entry itself as a single season
+      allSeasons.push(startMedia);
     }
 
 
