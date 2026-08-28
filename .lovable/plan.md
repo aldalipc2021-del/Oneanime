@@ -1,59 +1,36 @@
+# Alle Animes über AniList verfügbar machen
 
-# Migration von Jikan API zu AniList API
+Aktuell enthält die Datenbank 76 Serien, 203 Staffeln und 4.971 Episoden – nur was manuell per `sync-anime` synchronisiert wurde. Ziel: der gesamte AniList-Katalog soll in der App durchsuchbar und aufrufbar sein, ohne die bestehende „Datenbank zuerst"-Architektur aufzugeben.
 
-## Warum AniList?
-- **Zuverlassiger**: 90 Anfragen/Minute (vs. Jikans 3/Sekunde), kaum Rate-Limiting-Probleme
-- **Bessere Staffel-Gruppierung**: Anime-Relationen (Sequel/Prequel) sind direkt in der API enthalten
-- **Sehr bekannt**: Eine der meistgenutzten Anime-APIs weltweit
-- **Kein API-Key nötig**: Komplett kostenlos und offen
-- **GraphQL**: Nur die Daten abrufen, die wirklich gebraucht werden
+## Vorgehen in drei Stufen
 
-## Was sich andert
+### 1. Katalog-Import (Breite)
+Eine neue Edge Function `sync-catalog` lädt den kompletten AniList-Katalog seitenweise (50 Einträge pro Query, `sort: POPULARITY_DESC`, `type: ANIME`) und legt für jeden Titel einen leichten Serien-Eintrag an: Titel (romaji/englisch/japanisch), Cover, Beschreibung, Genres, Status, Format, Jahr, Episodenanzahl, AniList-ID.
 
-### Betroffene Dateien
+- Läuft in Batches (z. B. 20 Seiten pro Aufruf), damit das Zeitlimit der Function nicht überschritten wird.
+- Der Fortschritt (letzte Seite) wird in einer neuen Tabelle `sync_state` gespeichert – der nächste Aufruf macht dort weiter.
+- Rate-Limit-freundlich: kurze Pause zwischen den Queries, Retry bei 429.
+- Erwarteter Umfang: rund 20.000+ Serien (bzw. eine wählbare Obergrenze, z. B. nur Einträge mit Popularität > X, um Karteileichen auszuschließen).
 
-| Datei | Anderung |
-|---|---|
-| `src/hooks/useJikanApi.ts` | Komplett umschreiben auf AniList GraphQL |
-| `src/hooks/useAnimeSeasons.ts` | Vereinfachen - AniList liefert Relationen direkt mit |
-| `src/components/SearchBar.tsx` | API-Aufruf auf AniList umstellen |
-| `src/pages/Index.tsx` | Daten-Mapping anpassen (neue Feldnamen) |
-| `src/pages/SearchPage.tsx` | Daten-Mapping anpassen |
-| `src/pages/CalendarPage.tsx` | Schedule-Daten von AniList nutzen |
-| `src/pages/AnimeDetailPage.tsx` | Daten-Mapping anpassen |
-| `src/components/EpisodeList.tsx` | Episode-Interface anpassen |
-| `src/components/SeasonSelector.tsx` | SeasonEntry-Typ anpassen |
-| `vite.config.ts` | Cache-URL auf AniList andern |
-| `src/pages/LegalPage.tsx` | AniList statt Jikan erwahnen |
+### 2. Detail-Sync bei Bedarf (Tiefe)
+Katalog-Einträge haben zunächst keine Staffel-Kette, keine TMDB-Bilder, keine Episoden. Sobald ein Nutzer eine Detailseite öffnet und dort noch keine Staffeln existieren, wird der bestehende `sync-anime`-Ablauf (Sequel-/Prequel-Kette + TMDB) automatisch im Hintergrund angestoßen. Die Seite zeigt so lange einen Ladezustand und aktualisiert sich danach.
 
-### Wichtig: Tracking-Kompatibilitat
-- Die aktuelle Datenbank speichert `anime_id` als MAL-IDs
-- AniList hat ein `idMal`-Feld, das die MAL-ID enthalt
-- Wir speichern **beide IDs** und nutzen AniList-IDs als Primar-ID fur die API, behalten aber die MAL-ID fur bestehende Tracking-Daten
-- Bestehende getrackte Anime werden weiterhin korrekt angezeigt
+So bleibt es bei der Regel „Frontend liest nur aus der Datenbank" – nachgeladen wird ausschließlich im Backend.
+
+### 3. Aufräumen & Aktualität
+- Ein wiederholbarer Aufruf von `sync-catalog` aktualisiert bestehende Einträge (Status, Episodenzahl, Cover) statt Duplikate zu erzeugen.
+- Die Zusammenführungs-Logik aus `sync-anime` (Staffeln einer Kette in einem Eintrag, wie bei Bleach/Tokyo Ghoul) greift weiterhin und räumt Katalog-Duplikate beim Detail-Sync auf.
 
 ## Technische Details
 
-### 1. Neuer API-Hook (`useJikanApi.ts` wird zu `useAniListApi.ts`)
-- GraphQL-Queries an `https://graphql.anilist.co`
-- Alle Hooks werden neu implementiert: `useTopAnime`, `useSeasonalAnime`, `useAnimeById`, `useSearchAnime`, `useSchedule`, `useGenres`, `useAnimeRecommendations`
-- Einheitliches `Anime`-Interface das intern die AniList-Daten auf das bestehende Format mappt
+| Bereich | Änderung |
+|---|---|
+| Datenbank | Neue Tabelle `sync_state` (Job-Name, letzte Seite, Zeitstempel, Status). Neue Spalten auf `series`: `format`, `year`, `episode_count`, `popularity`, `detail_synced_at` |
+| Neue Function | `supabase/functions/sync-catalog/index.ts` – AniList-Paging, Batch-Upsert in `series`, Fortschritt in `sync_state` |
+| Bestehende Function | `sync-anime` bleibt unverändert in der Logik, wird aber zusätzlich vom Frontend/Detail-Sync ausgelöst |
+| Frontend | `useSeriesByAnilistId` / Detailseite: fehlt die Staffel-Kette, `sync-anime` aufrufen und danach neu laden. Suche & Startseite bleiben unverändert (lesen aus `series`) |
+| Suche | Volltext-Index auf `series.title`, `title_en`, `title_jp`, damit die Suche bei 20.000+ Einträgen schnell bleibt; Limit + Sortierung nach Popularität |
 
-### 2. Vereinfachtes Staffel-System (`useAnimeSeasons.ts`)
-- AniList liefert Relationen (SEQUEL, PREQUEL, SIDE_STORY) direkt im Anime-Query mit
-- Kein separater BFS-Algorithmus mit dutzenden API-Calls mehr notig
-- Eine einzige Query reicht um alle Staffeln zu bekommen
-
-### 3. Daten-Mapping
-- AniList nutzt andere Feldnamen (z.B. `coverImage` statt `images`, `title.english` statt `title_english`)
-- Ein zentrales Mapping sorgt dafur, dass alle bestehenden Komponenten weiterhin funktionieren
-- Minimale Anderungen in den UI-Komponenten notig
-
-### 4. Episoden
-- AniList liefert Episoden-Streaming-Links direkt mit
-- Episode-Titel werden aus AniList bezogen
-- Filler/Recap-Markierungen sind in AniList nicht vorhanden (werden entfernt oder aus externer Quelle ergänzt)
-
-### 5. MAL-Import
-- Die `mal-import` Edge Function bleibt unverandert (nutzt MAL direkt)
-- Importierte Anime werden uber die MAL-ID mit AniList verknupft
+## Offene Punkte
+- Der Erstimport dauert je nach Umfang mehrere Durchläufe (AniList erlaubt ca. 90 Anfragen/Minute). Ich starte ihn nach dem Deploy in mehreren Batches.
+- Genres/Filter auf der Startseite werden nach dem Import deutlich umfangreicher – ggf. lohnt anschließend eine Sortierung nach Popularität statt alphabetisch.
