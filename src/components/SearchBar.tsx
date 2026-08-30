@@ -4,6 +4,7 @@ import { Search, X, Loader2, TrendingUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 interface SearchResult {
   mal_id: number;
@@ -19,8 +20,6 @@ interface SearchBarProps {
   size?: "default" | "lg";
   autoFocus?: boolean;
 }
-
-const ANILIST_URL = "https://graphql.anilist.co";
 
 export const SearchBar = ({ className, size = "default", autoFocus = false }: SearchBarProps) => {
   const [query, setQuery] = useState("");
@@ -42,61 +41,55 @@ export const SearchBar = ({ className, size = "default", autoFocus = false }: Se
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     const searchAnime = async () => {
-      if (query.length < 2) {
+      const term = query.trim();
+      if (term.length < 2) {
         setResults([]);
+        setShowResults(false);
         return;
       }
 
       setIsLoading(true);
       try {
-        const gqlQuery = `
-          query ($search: String) {
-            Page(page: 1, perPage: 8) {
-              media(type: ANIME, search: $search, isAdult: false, sort: POPULARITY_DESC) {
-                id
-                idMal
-                title { romaji english }
-                coverImage { medium }
-                format
-                episodes
-                averageScore
-              }
-            }
-          }
-        `;
+        const escaped = term.replace(/[%,()]/g, " ").trim();
+        const { data, error } = await supabase
+          .from("series")
+          .select("anilist_id, title, title_en, title_de, cover_image, format, episode_count")
+          .or(`title.ilike.%${escaped}%,title_en.ilike.%${escaped}%,title_de.ilike.%${escaped}%`)
+          .order("popularity", { ascending: false, nullsFirst: false })
+          .limit(8);
 
-        const response = await fetch(ANILIST_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: gqlQuery, variables: { search: query } }),
-        });
-
-        const data = await response.json();
-        const media = data.data?.Page?.media || [];
+        if (error) throw error;
+        if (cancelled) return;
 
         setResults(
-          media.map((m: any) => ({
-            mal_id: m.id,
-            title: m.title.english || m.title.romaji,
-            image: m.coverImage.medium,
-            type: m.format || "Unknown",
-            episodes: m.episodes,
-            score: m.averageScore ? m.averageScore / 10 : null,
+          (data || []).map((s) => ({
+            mal_id: s.anilist_id,
+            title: s.title_de || s.title_en || s.title,
+            image: s.cover_image || "/placeholder.svg",
+            type: s.format || "Anime",
+            episodes: s.episode_count,
+            score: null,
           }))
         );
         setShowResults(true);
       } catch (error) {
         console.error("Search error:", error);
-        setResults([]);
+        if (!cancelled) setResults([]);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
 
-    const debounce = setTimeout(searchAnime, 300);
-    return () => clearTimeout(debounce);
+    const debounce = setTimeout(searchAnime, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(debounce);
+    };
   }, [query]);
+
 
   const handleSelect = (id: number) => {
     navigate(`/anime/${id}`);
