@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { SeasonEntry } from "@/hooks/useAnimeSeasons";
+import type { SeasonEntry } from "@/types/season";
 
 interface SeasonSelectorProps {
   seasons: SeasonEntry[];
