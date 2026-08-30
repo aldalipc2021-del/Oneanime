@@ -46,12 +46,19 @@ interface CatalogMedia {
   startDate: { year: number | null } | null;
 }
 
-async function fetchPage(page: number, popularity: number): Promise<{ media: CatalogMedia[]; hasNextPage: boolean }> {
+async function fetchPage(
+  page: number,
+  popularity: number,
+  year: number | null,
+): Promise<{ media: CatalogMedia[]; hasNextPage: boolean }> {
   for (let attempt = 0; attempt < 4; attempt++) {
     const res = await fetch(ANILIST_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: CATALOG_QUERY, variables: { page, perPage: PER_PAGE, popularity } }),
+      body: JSON.stringify({
+        query: CATALOG_QUERY,
+        variables: { page, perPage: PER_PAGE, popularity, year: year ?? undefined },
+      }),
     });
 
     if (res.status === 429) {
