@@ -7,14 +7,16 @@ const corsHeaders = {
 };
 
 const ANILIST_URL = "https://graphql.anilist.co";
-const JOB_NAME = "anilist_catalog";
+const JOB_PREFIX = "anilist_catalog";
 const PER_PAGE = 50;
 
+// AniList caps paging at 5000 entries per query, so the catalog is imported
+// in partitions (one per season year).
 const CATALOG_QUERY = `
-query ($page: Int, $perPage: Int, $popularity: Int) {
+query ($page: Int, $perPage: Int, $popularity: Int, $year: Int) {
   Page(page: $page, perPage: $perPage) {
     pageInfo { currentPage hasNextPage }
-    media(type: ANIME, sort: POPULARITY_DESC, isAdult: false, popularity_greater: $popularity) {
+    media(type: ANIME, sort: POPULARITY_DESC, isAdult: false, popularity_greater: $popularity, seasonYear: $year) {
       id
       title { romaji english native }
       coverImage { extraLarge large }
@@ -44,12 +46,19 @@ interface CatalogMedia {
   startDate: { year: number | null } | null;
 }
 
-async function fetchPage(page: number, popularity: number): Promise<{ media: CatalogMedia[]; hasNextPage: boolean }> {
+async function fetchPage(
+  page: number,
+  popularity: number,
+  year: number | null,
+): Promise<{ media: CatalogMedia[]; hasNextPage: boolean }> {
   for (let attempt = 0; attempt < 4; attempt++) {
     const res = await fetch(ANILIST_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: CATALOG_QUERY, variables: { page, perPage: PER_PAGE, popularity } }),
+      body: JSON.stringify({
+        query: CATALOG_QUERY,
+        variables: { page, perPage: PER_PAGE, popularity, year: year ?? undefined },
+      }),
     });
 
     if (res.status === 429) {
@@ -84,26 +93,31 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  let currentJob = JOB_PREFIX;
+
   try {
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const pages = Math.min(Math.max(Number(body.pages) || 20, 1), 40);
-    const minPopularity = Number.isFinite(Number(body.min_popularity)) ? Number(body.min_popularity) : 1000;
+    const minPopularity = Number.isFinite(Number(body.min_popularity)) ? Number(body.min_popularity) : 0;
+    const year = Number.isFinite(Number(body.year)) && Number(body.year) > 1900 ? Number(body.year) : null;
     const restart = body.restart === true;
+    const jobName = year ? `${JOB_PREFIX}_${year}` : JOB_PREFIX;
+    currentJob = jobName;
 
     // Load / init progress
     const { data: state } = await supabase
       .from("sync_state")
       .select("*")
-      .eq("job_name", JOB_NAME)
+      .eq("job_name", jobName)
       .maybeSingle();
 
-    let startPage = restart || !state ? 1 : (state.last_page || 0) + 1;
+    const startPage = restart || !state ? 1 : (state.last_page || 0) + 1;
     let totalItems = restart || !state ? 0 : state.total_items || 0;
 
     await supabase
       .from("sync_state")
       .upsert(
-        { job_name: JOB_NAME, last_page: startPage - 1, total_items: totalItems, status: "running", last_error: null },
+        { job_name: jobName, last_page: startPage - 1, total_items: totalItems, status: "running", last_error: null },
         { onConflict: "job_name" },
       );
 
@@ -113,8 +127,9 @@ Deno.serve(async (req) => {
     let lastCompletedPage = startPage - 1;
 
     for (let i = 0; i < pages && hasNextPage; i++) {
-      const { media, hasNextPage: next } = await fetchPage(page, minPopularity);
+      const { media, hasNextPage: next } = await fetchPage(page, minPopularity, year);
       hasNextPage = next;
+
 
       if (media.length > 0) {
         const rows = media.map((m) => ({
@@ -163,7 +178,7 @@ Deno.serve(async (req) => {
       .from("sync_state")
       .upsert(
         {
-          job_name: JOB_NAME,
+          job_name: jobName,
           last_page: hasNextPage ? lastCompletedPage : 0,
           total_items: totalItems,
           status: hasNextPage ? "paused" : "completed",
@@ -188,7 +203,7 @@ Deno.serve(async (req) => {
     const message = err instanceof Error ? err.message : String(err);
     await supabase
       .from("sync_state")
-      .upsert({ job_name: JOB_NAME, status: "error", last_error: message }, { onConflict: "job_name" });
+      .upsert({ job_name: currentJob, status: "error", last_error: message }, { onConflict: "job_name" });
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
