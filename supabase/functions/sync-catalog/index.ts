@@ -96,23 +96,25 @@ Deno.serve(async (req) => {
   try {
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const pages = Math.min(Math.max(Number(body.pages) || 20, 1), 40);
-    const minPopularity = Number.isFinite(Number(body.min_popularity)) ? Number(body.min_popularity) : 1000;
+    const minPopularity = Number.isFinite(Number(body.min_popularity)) ? Number(body.min_popularity) : 0;
+    const year = Number.isFinite(Number(body.year)) && Number(body.year) > 1900 ? Number(body.year) : null;
     const restart = body.restart === true;
+    const jobName = year ? `${JOB_PREFIX}_${year}` : JOB_PREFIX;
 
     // Load / init progress
     const { data: state } = await supabase
       .from("sync_state")
       .select("*")
-      .eq("job_name", JOB_NAME)
+      .eq("job_name", jobName)
       .maybeSingle();
 
-    let startPage = restart || !state ? 1 : (state.last_page || 0) + 1;
+    const startPage = restart || !state ? 1 : (state.last_page || 0) + 1;
     let totalItems = restart || !state ? 0 : state.total_items || 0;
 
     await supabase
       .from("sync_state")
       .upsert(
-        { job_name: JOB_NAME, last_page: startPage - 1, total_items: totalItems, status: "running", last_error: null },
+        { job_name: jobName, last_page: startPage - 1, total_items: totalItems, status: "running", last_error: null },
         { onConflict: "job_name" },
       );
 
@@ -122,8 +124,9 @@ Deno.serve(async (req) => {
     let lastCompletedPage = startPage - 1;
 
     for (let i = 0; i < pages && hasNextPage; i++) {
-      const { media, hasNextPage: next } = await fetchPage(page, minPopularity);
+      const { media, hasNextPage: next } = await fetchPage(page, minPopularity, year);
       hasNextPage = next;
+
 
       if (media.length > 0) {
         const rows = media.map((m) => ({
