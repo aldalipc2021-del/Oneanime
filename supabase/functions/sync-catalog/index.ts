@@ -175,7 +175,7 @@ Deno.serve(async (req) => {
       .from("sync_state")
       .upsert(
         {
-          job_name: JOB_NAME,
+          job_name: jobName,
           last_page: hasNextPage ? lastCompletedPage : 0,
           total_items: totalItems,
           status: hasNextPage ? "paused" : "completed",
