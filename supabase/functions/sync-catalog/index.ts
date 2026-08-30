@@ -7,14 +7,16 @@ const corsHeaders = {
 };
 
 const ANILIST_URL = "https://graphql.anilist.co";
-const JOB_NAME = "anilist_catalog";
+const JOB_PREFIX = "anilist_catalog";
 const PER_PAGE = 50;
 
+// AniList caps paging at 5000 entries per query, so the catalog is imported
+// in partitions (one per season year).
 const CATALOG_QUERY = `
-query ($page: Int, $perPage: Int, $popularity: Int) {
+query ($page: Int, $perPage: Int, $popularity: Int, $year: Int) {
   Page(page: $page, perPage: $perPage) {
     pageInfo { currentPage hasNextPage }
-    media(type: ANIME, sort: POPULARITY_DESC, isAdult: false, popularity_greater: $popularity) {
+    media(type: ANIME, sort: POPULARITY_DESC, isAdult: false, popularity_greater: $popularity, seasonYear: $year) {
       id
       title { romaji english native }
       coverImage { extraLarge large }
