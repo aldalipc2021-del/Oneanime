@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
     const message = err instanceof Error ? err.message : String(err);
     await supabase
       .from("sync_state")
-      .upsert({ job_name: JOB_NAME, status: "error", last_error: message }, { onConflict: "job_name" });
+      .upsert({ job_name: currentJob, status: "error", last_error: message }, { onConflict: "job_name" });
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
