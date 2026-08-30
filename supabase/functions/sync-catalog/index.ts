@@ -93,6 +93,8 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  let currentJob = JOB_PREFIX;
+
   try {
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const pages = Math.min(Math.max(Number(body.pages) || 20, 1), 40);
@@ -100,6 +102,7 @@ Deno.serve(async (req) => {
     const year = Number.isFinite(Number(body.year)) && Number(body.year) > 1900 ? Number(body.year) : null;
     const restart = body.restart === true;
     const jobName = year ? `${JOB_PREFIX}_${year}` : JOB_PREFIX;
+    currentJob = jobName;
 
     // Load / init progress
     const { data: state } = await supabase
