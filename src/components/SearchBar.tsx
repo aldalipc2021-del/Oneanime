@@ -59,21 +59,37 @@ export const SearchBar = ({ className, size = "default", autoFocus = false }: Se
           .select("anilist_id, title, title_en, title_de, cover_image, format, episode_count")
           .or(`title.ilike.%${escaped}%,title_en.ilike.%${escaped}%,title_de.ilike.%${escaped}%`)
           .order("popularity", { ascending: false, nullsFirst: false })
-          .limit(8);
+          .limit(40);
 
         if (error) throw error;
         if (cancelled) return;
 
+        const lower = escaped.toLowerCase();
+        const rank = (s: { title: string; title_en: string | null; title_de: string | null }) => {
+          const titles = [s.title_de, s.title_en, s.title]
+            .filter(Boolean)
+            .map((t) => (t as string).toLowerCase());
+          if (titles.some((t) => t === lower)) return 0;
+          if (titles.some((t) => t.startsWith(lower))) return 1;
+          if (titles.some((t) => new RegExp(`\\b${lower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(t))) return 2;
+          return 3;
+        };
+
         setResults(
-          (data || []).map((s) => ({
-            mal_id: s.anilist_id,
-            title: s.title_de || s.title_en || s.title,
-            image: s.cover_image || "/placeholder.svg",
-            type: s.format || "Anime",
-            episodes: s.episode_count,
-            score: null,
-          }))
+          (data || [])
+            .slice()
+            .sort((a, b) => rank(a) - rank(b))
+            .slice(0, 8)
+            .map((s) => ({
+              mal_id: s.anilist_id,
+              title: s.title_de || s.title_en || s.title,
+              image: s.cover_image || "/placeholder.svg",
+              type: s.format || "Anime",
+              episodes: s.episode_count,
+              score: null,
+            }))
         );
+
         setShowResults(true);
       } catch (error) {
         console.error("Search error:", error);
