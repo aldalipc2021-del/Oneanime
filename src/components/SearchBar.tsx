@@ -54,7 +54,7 @@ export const SearchBar = ({ className, size = "default", autoFocus = false }: Se
       setIsLoading(true);
       try {
         const escaped = term.replace(/[%,()]/g, " ").trim();
-        const cols = "anilist_id, title, title_en, title_de, cover_image, format, episode_count";
+        const cols = "anilist_id, title, title_en, title_de, cover_image, format, episode_count, popularity";
 
         // 1) Titles starting with the term (catches main series without popularity data)
         const prefixReq = supabase
@@ -84,6 +84,7 @@ export const SearchBar = ({ className, size = "default", autoFocus = false }: Se
           cover_image: string | null;
           format: string | null;
           episode_count: number | null;
+          popularity: number | null;
         };
 
         const merged = new Map<number, Row>();
@@ -107,7 +108,7 @@ export const SearchBar = ({ className, size = "default", autoFocus = false }: Se
             .sort((a, b) => {
               const r = rank(a) - rank(b);
               if (r !== 0) return r;
-              return (a.title_en || a.title).length - (b.title_en || b.title).length;
+              return (b.popularity || 0) - (a.popularity || 0);
             })
             .slice(0, 8)
             .map((s) => ({
