@@ -50,8 +50,8 @@ const Index = () => {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="relative overflow-hidden px-4 pb-6 pt-2 md:px-6 md:pb-10 md:pt-4">
-        <div className="absolute inset-0 -z-10">
+      <section className="relative px-4 pb-6 pt-2 md:px-6 md:pb-10 md:pt-4">
+        <div className="absolute inset-0 -z-10 overflow-hidden">
           <div className="absolute left-1/4 top-0 h-[600px] w-[600px] rounded-full bg-primary/8 blur-[150px] animate-pulse" />
           <div className="absolute right-1/4 bottom-0 h-[500px] w-[500px] rounded-full bg-accent/6 blur-[130px] animate-pulse" style={{ animationDelay: "1s" }} />
         </div>
@@ -66,7 +66,7 @@ const Index = () => {
           </p>
         </div>
 
-        <div ref={searchRef} className="mx-auto max-w-2xl animate-fade-up" style={{ animationDelay: "200ms" }}>
+        <div ref={searchRef} className="relative z-[60] mx-auto max-w-2xl animate-fade-up" style={{ animationDelay: "200ms" }}>
           <SearchBar size="lg" />
         </div>
       </section>
