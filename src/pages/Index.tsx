@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { SearchBar } from "@/components/SearchBar";
 import { AnimeCard } from "@/components/AnimeCard";
 import { Button } from "@/components/ui/button";
-import { useAllSeries, seriesToAnimeCard } from "@/hooks/useAnimeDB";
+import { useAllSeries, useSeriesCount, seriesToAnimeCard } from "@/hooks/useAnimeDB";
 import { useTrackedAnime } from "@/hooks/useTracking";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2, TrendingUp, Sparkles, Calendar, ChevronRight, Flame, Library } from "lucide-react";
@@ -24,6 +24,7 @@ const Index = () => {
 
   const filterParam = activeFilter === "all" ? undefined : activeFilter;
   const { data: seriesData, isLoading } = useAllSeries(filterParam);
+  const { data: totalCount } = useSeriesCount();
   const { user } = useAuth();
   const { data: trackedAnime } = useTrackedAnime();
 
@@ -104,7 +105,7 @@ const Index = () => {
                 {filterOptions.find((f) => f.value === activeFilter)?.label} Anime
               </h2>
               <p className="text-sm text-muted-foreground mt-0.5">
-                {filteredList.length} Anime in der Bibliothek
+                Top {filteredList.length} von {(totalCount ?? 0).toLocaleString("de-DE")} Anime
               </p>
             </div>
             <Link to="/search">
