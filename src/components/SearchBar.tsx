@@ -200,7 +200,7 @@ export const SearchBar = ({ className, size = "default", autoFocus = false }: Se
 
       {/* Results Dropdown */}
       {showResults && results.length > 0 && (
-        <div className="absolute top-full left-0 right-0 z-50 mt-2 overflow-hidden rounded-2xl border border-border/50 bg-card/98 shadow-2xl backdrop-blur-xl animate-fade-in">
+        <div className="absolute top-full left-0 right-0 z-50 mt-2 overflow-hidden rounded-2xl border border-border/50 bg-popover shadow-2xl animate-fade-in">
           <div className="max-h-[400px] overflow-y-auto">
             {results.map((anime, index) => (
               <button
@@ -243,7 +243,7 @@ export const SearchBar = ({ className, size = "default", autoFocus = false }: Se
 
       {/* No Results */}
       {showResults && query.length >= 2 && !isLoading && results.length === 0 && (
-        <div className="absolute top-full left-0 right-0 z-50 mt-2 rounded-2xl border border-border/50 bg-card/98 p-6 text-center shadow-2xl backdrop-blur-xl animate-fade-in">
+        <div className="absolute top-full left-0 right-0 z-50 mt-2 rounded-2xl border border-border/50 bg-popover p-6 text-center shadow-2xl animate-fade-in">
           <p className="text-muted-foreground">Keine Ergebnisse für "{query}"</p>
         </div>
       )}
