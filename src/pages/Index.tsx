@@ -66,7 +66,7 @@ const Index = () => {
           </p>
         </div>
 
-        <div ref={searchRef} className="mx-auto max-w-2xl animate-fade-up" style={{ animationDelay: "200ms" }}>
+        <div ref={searchRef} className="relative z-[60] mx-auto max-w-2xl animate-fade-up" style={{ animationDelay: "200ms" }}>
           <SearchBar size="lg" />
         </div>
       </section>
