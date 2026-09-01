@@ -54,31 +54,61 @@ export const SearchBar = ({ className, size = "default", autoFocus = false }: Se
       setIsLoading(true);
       try {
         const escaped = term.replace(/[%,()]/g, " ").trim();
-        const { data, error } = await supabase
+        const cols = "anilist_id, title, title_en, title_de, cover_image, format, episode_count";
+
+        // 1) Titles starting with the term (catches main series without popularity data)
+        const prefixReq = supabase
           .from("series")
-          .select("anilist_id, title, title_en, title_de, cover_image, format, episode_count")
+          .select(cols)
+          .or(`title.ilike.${escaped}%,title_en.ilike.${escaped}%,title_de.ilike.${escaped}%`)
+          .limit(20);
+
+        // 2) Titles containing the term anywhere, most popular first
+        const containsReq = supabase
+          .from("series")
+          .select(cols)
           .or(`title.ilike.%${escaped}%,title_en.ilike.%${escaped}%,title_de.ilike.%${escaped}%`)
           .order("popularity", { ascending: false, nullsFirst: false })
-          .limit(40);
+          .limit(30);
 
-        if (error) throw error;
+        const [prefixRes, containsRes] = await Promise.all([prefixReq, containsReq]);
+        if (prefixRes.error) throw prefixRes.error;
+        if (containsRes.error) throw containsRes.error;
         if (cancelled) return;
 
+        type Row = {
+          anilist_id: number;
+          title: string;
+          title_en: string | null;
+          title_de: string | null;
+          cover_image: string | null;
+          format: string | null;
+          episode_count: number | null;
+        };
+
+        const merged = new Map<number, Row>();
+        for (const row of [...(prefixRes.data || []), ...(containsRes.data || [])] as Row[]) {
+          if (!merged.has(row.anilist_id)) merged.set(row.anilist_id, row);
+        }
+
         const lower = escaped.toLowerCase();
-        const rank = (s: { title: string; title_en: string | null; title_de: string | null }) => {
+        const rank = (s: Row) => {
           const titles = [s.title_de, s.title_en, s.title]
             .filter(Boolean)
             .map((t) => (t as string).toLowerCase());
           if (titles.some((t) => t === lower)) return 0;
           if (titles.some((t) => t.startsWith(lower))) return 1;
-          if (titles.some((t) => new RegExp(`\\b${lower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(t))) return 2;
+          if (titles.some((t) => t.includes(` ${lower}`))) return 2;
           return 3;
         };
 
         setResults(
-          (data || [])
-            .slice()
-            .sort((a, b) => rank(a) - rank(b))
+          [...merged.values()]
+            .sort((a, b) => {
+              const r = rank(a) - rank(b);
+              if (r !== 0) return r;
+              return (a.title_en || a.title).length - (b.title_en || b.title).length;
+            })
             .slice(0, 8)
             .map((s) => ({
               mal_id: s.anilist_id,
@@ -89,6 +119,7 @@ export const SearchBar = ({ className, size = "default", autoFocus = false }: Se
               score: null,
             }))
         );
+
 
         setShowResults(true);
       } catch (error) {
