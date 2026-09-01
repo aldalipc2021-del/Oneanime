@@ -264,3 +264,18 @@ export const useEnsureDetailSync = (
   return { isSyncing, failed };
 };
 
+
+// Total number of series in the catalog
+export const useSeriesCount = () => {
+  return useQuery({
+    queryKey: ["dbSeriesCount"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("series")
+        .select("id", { count: "exact", head: true });
+      if (error) throw error;
+      return count ?? 0;
+    },
+    staleTime: 30 * 60 * 1000,
+  });
+};
