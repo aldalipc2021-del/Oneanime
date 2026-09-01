@@ -54,26 +54,74 @@ export const SearchBar = ({ className, size = "default", autoFocus = false }: Se
       setIsLoading(true);
       try {
         const escaped = term.replace(/[%,()]/g, " ").trim();
-        const { data, error } = await supabase
+        const cols = "anilist_id, title, title_en, title_de, cover_image, format, episode_count, popularity";
+
+        // 1) Titles starting with the term (catches main series without popularity data)
+        const prefixReq = supabase
           .from("series")
-          .select("anilist_id, title, title_en, title_de, cover_image, format, episode_count")
+          .select(cols)
+          .or(`title.ilike.${escaped}%,title_en.ilike.${escaped}%,title_de.ilike.${escaped}%`)
+          .limit(20);
+
+        // 2) Titles containing the term anywhere, most popular first
+        const containsReq = supabase
+          .from("series")
+          .select(cols)
           .or(`title.ilike.%${escaped}%,title_en.ilike.%${escaped}%,title_de.ilike.%${escaped}%`)
           .order("popularity", { ascending: false, nullsFirst: false })
-          .limit(8);
+          .limit(30);
 
-        if (error) throw error;
+        const [prefixRes, containsRes] = await Promise.all([prefixReq, containsReq]);
+        if (prefixRes.error) throw prefixRes.error;
+        if (containsRes.error) throw containsRes.error;
         if (cancelled) return;
 
+        type Row = {
+          anilist_id: number;
+          title: string;
+          title_en: string | null;
+          title_de: string | null;
+          cover_image: string | null;
+          format: string | null;
+          episode_count: number | null;
+          popularity: number | null;
+        };
+
+        const merged = new Map<number, Row>();
+        for (const row of [...(prefixRes.data || []), ...(containsRes.data || [])] as Row[]) {
+          if (!merged.has(row.anilist_id)) merged.set(row.anilist_id, row);
+        }
+
+        const lower = escaped.toLowerCase();
+        const rank = (s: Row) => {
+          const titles = [s.title_de, s.title_en, s.title]
+            .filter(Boolean)
+            .map((t) => (t as string).toLowerCase());
+          if (titles.some((t) => t === lower)) return 0;
+          if (titles.some((t) => t.startsWith(lower))) return 1;
+          if (titles.some((t) => t.includes(` ${lower}`))) return 2;
+          return 3;
+        };
+
         setResults(
-          (data || []).map((s) => ({
-            mal_id: s.anilist_id,
-            title: s.title_de || s.title_en || s.title,
-            image: s.cover_image || "/placeholder.svg",
-            type: s.format || "Anime",
-            episodes: s.episode_count,
-            score: null,
-          }))
+          [...merged.values()]
+            .sort((a, b) => {
+              const r = rank(a) - rank(b);
+              if (r !== 0) return r;
+              return (b.popularity || 0) - (a.popularity || 0);
+            })
+            .slice(0, 8)
+            .map((s) => ({
+              mal_id: s.anilist_id,
+              title: s.title_de || s.title_en || s.title,
+              image: s.cover_image || "/placeholder.svg",
+              type: s.format || "Anime",
+              episodes: s.episode_count,
+              score: null,
+            }))
         );
+
+
         setShowResults(true);
       } catch (error) {
         console.error("Search error:", error);
