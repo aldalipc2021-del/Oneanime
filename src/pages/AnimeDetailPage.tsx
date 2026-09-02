@@ -133,23 +133,51 @@ const AnimeDetailPage = () => {
     }
   };
 
-  const handleToggleEpisodeWatched = async (epKey: string) => {
-    if (!user) { navigate("/auth"); return; }
-    const newWatched = new Set(watchedEpisodes);
-    if (newWatched.has(epKey)) newWatched.delete(epKey);
-    else newWatched.add(epKey);
-    setWatchedEpisodes(newWatched);
-    localStorage.setItem(`watchedEpisodes_${animeId}`, JSON.stringify(Array.from(newWatched)));
+  const syncTrackedEpisodeCount = async (count: number) => {
+    if (!tracking) return;
+    try {
+      await updateTracking.mutateAsync({ animeId, updates: { current_episode: count } });
+    } catch {}
+  };
 
-    if (tracking) {
-      try {
-        await updateTracking.mutateAsync({
-          animeId,
-          updates: { current_episode: newWatched.size },
-        });
-      } catch {}
+  const handleToggleEpisodeWatched = async (seasonId: string, episodeNumber: number) => {
+    if (!user) { navigate("/auth"); return; }
+    const isWatched = watchedKeys.has(`${seasonId}:${episodeNumber}`);
+    try {
+      await toggleEpisode.mutateAsync({ animeId, seasonId, episodeNumber, watched: !isWatched });
+      await syncTrackedEpisodeCount(watchedKeys.size + (isWatched ? -1 : 1));
+    } catch {
+      toast({ title: "Fehler beim Speichern", variant: "destructive" });
     }
   };
+
+  const handleMarkAllWatched = async () => {
+    if (!user) { navigate("/auth"); return; }
+    if (!selectedSeasonId || !episodes || episodes.length === 0) return;
+    try {
+      await markAllWatched.mutateAsync({
+        animeId,
+        seasonId: selectedSeasonId,
+        episodeCount: episodes.length,
+      });
+      const seasonWatched = (episodeProgress || []).filter((p) => p.season_id === selectedSeasonId).length;
+      await syncTrackedEpisodeCount(watchedKeys.size - seasonWatched + episodes.length);
+    } catch {
+      toast({ title: "Fehler beim Speichern", variant: "destructive" });
+    }
+  };
+
+  const handleMarkAllUnwatched = async () => {
+    if (!user || !selectedSeasonId) return;
+    try {
+      await markAllUnwatched.mutateAsync({ animeId, seasonId: selectedSeasonId });
+      const seasonWatched = (episodeProgress || []).filter((p) => p.season_id === selectedSeasonId).length;
+      await syncTrackedEpisodeCount(watchedKeys.size - seasonWatched);
+    } catch {
+      toast({ title: "Fehler beim Speichern", variant: "destructive" });
+    }
+  };
+
 
   const handleSaveNotes = async () => {
     if (!tracking) return;
