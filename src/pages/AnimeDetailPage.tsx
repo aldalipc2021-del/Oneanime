@@ -3,6 +3,13 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useSeriesByAnilistId, useDBSeasons, useDBEpisodes, getDisplayTitle, useEnsureDetailSync } from "@/hooks/useAnimeDB";
 import { useAuth } from "@/hooks/useAuth";
 import { useTrackingStatus, useAddTracking, useUpdateTracking, TrackingStatus } from "@/hooks/useTracking";
+import {
+  useAllEpisodeProgress,
+  useToggleEpisodeProgress,
+  useMarkAllEpisodesWatched,
+  useMarkAllEpisodesUnwatched,
+  useMigrateLocalEpisodeProgress,
+} from "@/hooks/useEpisodeProgress";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+
 
 const AnimeDetailPage = () => {
   const { id } = useParams<{ id: string }>();
