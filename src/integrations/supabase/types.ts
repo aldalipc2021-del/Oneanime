@@ -671,7 +671,25 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      public_custom_list_items: {
+        Row: {
+          added_at: string | null
+          anime_id: number | null
+          anime_image: string | null
+          anime_title: string | null
+          id: string | null
+          list_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_list_items_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "custom_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       has_role: {
