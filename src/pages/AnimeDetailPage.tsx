@@ -191,7 +191,7 @@ const AnimeDetailPage = () => {
   };
 
   const currentStatus = tracking?.status;
-  const progressWatched = watchedEpisodes.size;
+  const progressWatched = watchedKeys.size;
 
   return (
     <div className="min-h-screen pb-12">
