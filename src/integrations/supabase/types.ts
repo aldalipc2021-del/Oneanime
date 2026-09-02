@@ -113,6 +113,41 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_list_item_notes: {
+        Row: {
+          created_at: string
+          id: string
+          item_id: string
+          note: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_id: string
+          note: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_id?: string
+          note?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_list_item_notes_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: true
+            referencedRelation: "custom_list_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_list_items: {
         Row: {
           added_at: string
@@ -121,7 +156,6 @@ export type Database = {
           anime_title: string
           id: string
           list_id: string
-          notes: string | null
         }
         Insert: {
           added_at?: string
@@ -130,7 +164,6 @@ export type Database = {
           anime_title: string
           id?: string
           list_id: string
-          notes?: string | null
         }
         Update: {
           added_at?: string
@@ -139,7 +172,6 @@ export type Database = {
           anime_title?: string
           id?: string
           list_id?: string
-          notes?: string | null
         }
         Relationships: [
           {
@@ -671,25 +703,7 @@ export type Database = {
       }
     }
     Views: {
-      public_custom_list_items: {
-        Row: {
-          added_at: string | null
-          anime_id: number | null
-          anime_image: string | null
-          anime_title: string | null
-          id: string | null
-          list_id: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "custom_list_items_list_id_fkey"
-            columns: ["list_id"]
-            isOneToOne: false
-            referencedRelation: "custom_lists"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Functions: {
       has_role: {
