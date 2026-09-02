@@ -3,6 +3,13 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useSeriesByAnilistId, useDBSeasons, useDBEpisodes, getDisplayTitle, useEnsureDetailSync } from "@/hooks/useAnimeDB";
 import { useAuth } from "@/hooks/useAuth";
 import { useTrackingStatus, useAddTracking, useUpdateTracking, TrackingStatus } from "@/hooks/useTracking";
+import {
+  useAllEpisodeProgress,
+  useToggleEpisodeProgress,
+  useMarkAllEpisodesWatched,
+  useMarkAllEpisodesUnwatched,
+  useMigrateLocalEpisodeProgress,
+} from "@/hooks/useEpisodeProgress";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+
 
 const AnimeDetailPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -40,7 +48,18 @@ const AnimeDetailPage = () => {
   const [showNotes, setShowNotes] = useState(false);
   const [translatedSynopsis, setTranslatedSynopsis] = useState<string | null>(null);
   const [showOriginal, setShowOriginal] = useState(false);
-  const [watchedEpisodes, setWatchedEpisodes] = useState<Set<string>>(new Set());
+
+  // Episode progress lives in the database (synced across devices)
+  useMigrateLocalEpisodeProgress(animeId, seasons);
+  const { data: episodeProgress } = useAllEpisodeProgress(animeId);
+  const toggleEpisode = useToggleEpisodeProgress();
+  const markAllWatched = useMarkAllEpisodesWatched();
+  const markAllUnwatched = useMarkAllEpisodesUnwatched();
+
+  const watchedKeys = useMemo(
+    () => new Set((episodeProgress || []).map((p) => `${p.season_id}:${p.episode_number}`)),
+    [episodeProgress],
+  );
 
   // Select first season by default
   useEffect(() => {
@@ -55,12 +74,6 @@ const AnimeDetailPage = () => {
     setTranslatedSynopsis(null);
   }, [animeId]);
 
-  // Load watched episodes
-  useEffect(() => {
-    const saved = localStorage.getItem(`watchedEpisodes_${animeId}`);
-    if (saved) setWatchedEpisodes(new Set(JSON.parse(saved)));
-    else setWatchedEpisodes(new Set());
-  }, [animeId]);
 
   // Translate synopsis
   useEffect(() => {
@@ -120,23 +133,51 @@ const AnimeDetailPage = () => {
     }
   };
 
-  const handleToggleEpisodeWatched = async (epKey: string) => {
-    if (!user) { navigate("/auth"); return; }
-    const newWatched = new Set(watchedEpisodes);
-    if (newWatched.has(epKey)) newWatched.delete(epKey);
-    else newWatched.add(epKey);
-    setWatchedEpisodes(newWatched);
-    localStorage.setItem(`watchedEpisodes_${animeId}`, JSON.stringify(Array.from(newWatched)));
+  const syncTrackedEpisodeCount = async (count: number) => {
+    if (!tracking) return;
+    try {
+      await updateTracking.mutateAsync({ animeId, updates: { current_episode: count } });
+    } catch {}
+  };
 
-    if (tracking) {
-      try {
-        await updateTracking.mutateAsync({
-          animeId,
-          updates: { current_episode: newWatched.size },
-        });
-      } catch {}
+  const handleToggleEpisodeWatched = async (seasonId: string, episodeNumber: number) => {
+    if (!user) { navigate("/auth"); return; }
+    const isWatched = watchedKeys.has(`${seasonId}:${episodeNumber}`);
+    try {
+      await toggleEpisode.mutateAsync({ animeId, seasonId, episodeNumber, watched: !isWatched });
+      await syncTrackedEpisodeCount(watchedKeys.size + (isWatched ? -1 : 1));
+    } catch {
+      toast({ title: "Fehler beim Speichern", variant: "destructive" });
     }
   };
+
+  const handleMarkAllWatched = async () => {
+    if (!user) { navigate("/auth"); return; }
+    if (!selectedSeasonId || !episodes || episodes.length === 0) return;
+    try {
+      await markAllWatched.mutateAsync({
+        animeId,
+        seasonId: selectedSeasonId,
+        episodeCount: episodes.length,
+      });
+      const seasonWatched = (episodeProgress || []).filter((p) => p.season_id === selectedSeasonId).length;
+      await syncTrackedEpisodeCount(watchedKeys.size - seasonWatched + episodes.length);
+    } catch {
+      toast({ title: "Fehler beim Speichern", variant: "destructive" });
+    }
+  };
+
+  const handleMarkAllUnwatched = async () => {
+    if (!user || !selectedSeasonId) return;
+    try {
+      await markAllUnwatched.mutateAsync({ animeId, seasonId: selectedSeasonId });
+      const seasonWatched = (episodeProgress || []).filter((p) => p.season_id === selectedSeasonId).length;
+      await syncTrackedEpisodeCount(watchedKeys.size - seasonWatched);
+    } catch {
+      toast({ title: "Fehler beim Speichern", variant: "destructive" });
+    }
+  };
+
 
   const handleSaveNotes = async () => {
     if (!tracking) return;
@@ -150,7 +191,7 @@ const AnimeDetailPage = () => {
   };
 
   const currentStatus = tracking?.status;
-  const progressWatched = watchedEpisodes.size;
+  const progressWatched = watchedKeys.size;
 
   return (
     <div className="min-h-screen pb-12">
@@ -312,10 +353,38 @@ const AnimeDetailPage = () => {
       {/* Episodes */}
       {selectedSeason && (
         <section className="mx-auto max-w-7xl px-4 py-8 md:px-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 className="text-xl font-bold">
               Staffel {selectedSeason.season_number} — Episoden
+              {episodes && episodes.length > 0 && (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  {(episodeProgress || []).filter((p) => p.season_id === selectedSeason.id).length}/{episodes.length} gesehen
+                </span>
+              )}
             </h2>
+            {user && episodes && episodes.length > 0 && (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={handleMarkAllWatched}
+                  disabled={markAllWatched.isPending}
+                >
+                  {markAllWatched.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Alle gesehen
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2"
+                  onClick={handleMarkAllUnwatched}
+                  disabled={markAllUnwatched.isPending}
+                >
+                  <EyeOff className="h-4 w-4" /> Zurücksetzen
+                </Button>
+              </div>
+            )}
           </div>
           {episodesLoading ? (
             <div className="flex items-center justify-center py-12">
@@ -324,8 +393,7 @@ const AnimeDetailPage = () => {
           ) : episodes && episodes.length > 0 ? (
             <div className="space-y-2">
               {episodes.map((ep) => {
-                const epKey = `s${selectedSeason.season_number}e${ep.episode_number}`;
-                const isWatched = watchedEpisodes.has(epKey);
+                const isWatched = watchedKeys.has(`${selectedSeason.id}:${ep.episode_number}`);
                 return (
                   <div key={ep.id} className={cn(
                     "flex items-center gap-4 rounded-xl border border-border bg-card p-3 transition-all",
@@ -347,7 +415,7 @@ const AnimeDetailPage = () => {
                       <Button
                         variant={isWatched ? "default" : "ghost"}
                         size="sm"
-                        onClick={() => handleToggleEpisodeWatched(epKey)}
+                        onClick={() => handleToggleEpisodeWatched(selectedSeason.id, ep.episode_number)}
                         className="shrink-0"
                       >
                         {isWatched ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
@@ -357,6 +425,7 @@ const AnimeDetailPage = () => {
                 );
               })}
             </div>
+
           ) : (
             <p className="text-muted-foreground text-center py-8">Keine Episoden-Daten verfügbar</p>
           )}

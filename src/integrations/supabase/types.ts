@@ -252,7 +252,7 @@ export type Database = {
           created_at: string
           episode_number: number
           id: string
-          season_id: number
+          season_id: string
           updated_at: string
           user_id: string
           watched: boolean
@@ -263,7 +263,7 @@ export type Database = {
           created_at?: string
           episode_number: number
           id?: string
-          season_id: number
+          season_id: string
           updated_at?: string
           user_id: string
           watched?: boolean
@@ -274,13 +274,21 @@ export type Database = {
           created_at?: string
           episode_number?: number
           id?: string
-          season_id?: number
+          season_id?: string
           updated_at?: string
           user_id?: string
           watched?: boolean
           watched_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "episode_progress_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       episodes: {
         Row: {
