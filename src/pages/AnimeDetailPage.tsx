@@ -353,10 +353,38 @@ const AnimeDetailPage = () => {
       {/* Episodes */}
       {selectedSeason && (
         <section className="mx-auto max-w-7xl px-4 py-8 md:px-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 className="text-xl font-bold">
               Staffel {selectedSeason.season_number} — Episoden
+              {episodes && episodes.length > 0 && (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  {(episodeProgress || []).filter((p) => p.season_id === selectedSeason.id).length}/{episodes.length} gesehen
+                </span>
+              )}
             </h2>
+            {user && episodes && episodes.length > 0 && (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={handleMarkAllWatched}
+                  disabled={markAllWatched.isPending}
+                >
+                  {markAllWatched.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Alle gesehen
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2"
+                  onClick={handleMarkAllUnwatched}
+                  disabled={markAllUnwatched.isPending}
+                >
+                  <EyeOff className="h-4 w-4" /> Zurücksetzen
+                </Button>
+              </div>
+            )}
           </div>
           {episodesLoading ? (
             <div className="flex items-center justify-center py-12">
@@ -365,8 +393,7 @@ const AnimeDetailPage = () => {
           ) : episodes && episodes.length > 0 ? (
             <div className="space-y-2">
               {episodes.map((ep) => {
-                const epKey = `s${selectedSeason.season_number}e${ep.episode_number}`;
-                const isWatched = watchedEpisodes.has(epKey);
+                const isWatched = watchedKeys.has(`${selectedSeason.id}:${ep.episode_number}`);
                 return (
                   <div key={ep.id} className={cn(
                     "flex items-center gap-4 rounded-xl border border-border bg-card p-3 transition-all",
@@ -388,7 +415,7 @@ const AnimeDetailPage = () => {
                       <Button
                         variant={isWatched ? "default" : "ghost"}
                         size="sm"
-                        onClick={() => handleToggleEpisodeWatched(epKey)}
+                        onClick={() => handleToggleEpisodeWatched(selectedSeason.id, ep.episode_number)}
                         className="shrink-0"
                       >
                         {isWatched ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
@@ -398,6 +425,7 @@ const AnimeDetailPage = () => {
                 );
               })}
             </div>
+
           ) : (
             <p className="text-muted-foreground text-center py-8">Keine Episoden-Daten verfügbar</p>
           )}
