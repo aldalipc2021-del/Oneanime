@@ -163,6 +163,7 @@ export const useDeleteCustomList = () => {
 
 export const useAddToCustomList = () => {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async ({
@@ -178,15 +179,25 @@ export const useAddToCustomList = () => {
       animeImage?: string;
       notes?: string;
     }) => {
-      const { error } = await supabase.from("custom_list_items").insert({
-        list_id: listId,
-        anime_id: animeId,
-        anime_title: animeTitle,
-        anime_image: animeImage || null,
-        notes: notes || null,
-      });
+      const { data, error } = await supabase
+        .from("custom_list_items")
+        .insert({
+          list_id: listId,
+          anime_id: animeId,
+          anime_title: animeTitle,
+          anime_image: animeImage || null,
+        })
+        .select("id")
+        .single();
 
       if (error) throw error;
+
+      if (notes && notes.trim() && user && data) {
+        const { error: noteError } = await supabase
+          .from("custom_list_item_notes")
+          .insert({ item_id: data.id, user_id: user.id, note: notes.trim() });
+        if (noteError) throw noteError;
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
@@ -195,6 +206,7 @@ export const useAddToCustomList = () => {
     },
   });
 };
+
 
 export const useRemoveFromCustomList = () => {
   const queryClient = useQueryClient();
