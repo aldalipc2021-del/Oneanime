@@ -47,7 +47,7 @@ export const useCustomListItems = (listId: string) => {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ["customListItems", listId],
+    queryKey: ["customListItems", listId, user?.id],
     queryFn: async () => {
       if (!listId) return [];
 
@@ -58,11 +58,30 @@ export const useCustomListItems = (listId: string) => {
         .order("added_at", { ascending: false });
 
       if (error) throw error;
-      return data as CustomListItem[];
+
+      const items = (data || []).map((item) => ({
+        ...item,
+        notes: null as string | null,
+      })) as CustomListItem[];
+
+      if (!user || items.length === 0) return items;
+
+      // Notes are private to the owner and stored in a separate protected table
+      const { data: notes } = await supabase
+        .from("custom_list_item_notes")
+        .select("item_id, note")
+        .in(
+          "item_id",
+          items.map((i) => i.id),
+        );
+
+      const noteMap = new Map((notes || []).map((n) => [n.item_id, n.note]));
+      return items.map((i) => ({ ...i, notes: noteMap.get(i.id) ?? null }));
     },
     enabled: !!listId && !!user,
   });
 };
+
 
 export const useCreateCustomList = () => {
   const queryClient = useQueryClient();
@@ -144,6 +163,7 @@ export const useDeleteCustomList = () => {
 
 export const useAddToCustomList = () => {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async ({
@@ -159,15 +179,25 @@ export const useAddToCustomList = () => {
       animeImage?: string;
       notes?: string;
     }) => {
-      const { error } = await supabase.from("custom_list_items").insert({
-        list_id: listId,
-        anime_id: animeId,
-        anime_title: animeTitle,
-        anime_image: animeImage || null,
-        notes: notes || null,
-      });
+      const { data, error } = await supabase
+        .from("custom_list_items")
+        .insert({
+          list_id: listId,
+          anime_id: animeId,
+          anime_title: animeTitle,
+          anime_image: animeImage || null,
+        })
+        .select("id")
+        .single();
 
       if (error) throw error;
+
+      if (notes && notes.trim() && user && data) {
+        const { error: noteError } = await supabase
+          .from("custom_list_item_notes")
+          .insert({ item_id: data.id, user_id: user.id, note: notes.trim() });
+        if (noteError) throw noteError;
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
@@ -176,6 +206,7 @@ export const useAddToCustomList = () => {
     },
   });
 };
+
 
 export const useRemoveFromCustomList = () => {
   const queryClient = useQueryClient();

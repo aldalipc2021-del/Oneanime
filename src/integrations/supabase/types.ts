@@ -113,6 +113,41 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_list_item_notes: {
+        Row: {
+          created_at: string
+          id: string
+          item_id: string
+          note: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_id: string
+          note: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_id?: string
+          note?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_list_item_notes_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: true
+            referencedRelation: "custom_list_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_list_items: {
         Row: {
           added_at: string
@@ -121,7 +156,6 @@ export type Database = {
           anime_title: string
           id: string
           list_id: string
-          notes: string | null
         }
         Insert: {
           added_at?: string
@@ -130,7 +164,6 @@ export type Database = {
           anime_title: string
           id?: string
           list_id: string
-          notes?: string | null
         }
         Update: {
           added_at?: string
@@ -139,7 +172,6 @@ export type Database = {
           anime_title?: string
           id?: string
           list_id?: string
-          notes?: string | null
         }
         Relationships: [
           {
