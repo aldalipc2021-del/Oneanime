@@ -48,7 +48,18 @@ const AnimeDetailPage = () => {
   const [showNotes, setShowNotes] = useState(false);
   const [translatedSynopsis, setTranslatedSynopsis] = useState<string | null>(null);
   const [showOriginal, setShowOriginal] = useState(false);
-  const [watchedEpisodes, setWatchedEpisodes] = useState<Set<string>>(new Set());
+
+  // Episode progress lives in the database (synced across devices)
+  useMigrateLocalEpisodeProgress(animeId, seasons);
+  const { data: episodeProgress } = useAllEpisodeProgress(animeId);
+  const toggleEpisode = useToggleEpisodeProgress();
+  const markAllWatched = useMarkAllEpisodesWatched();
+  const markAllUnwatched = useMarkAllEpisodesUnwatched();
+
+  const watchedKeys = useMemo(
+    () => new Set((episodeProgress || []).map((p) => `${p.season_id}:${p.episode_number}`)),
+    [episodeProgress],
+  );
 
   // Select first season by default
   useEffect(() => {
@@ -63,12 +74,6 @@ const AnimeDetailPage = () => {
     setTranslatedSynopsis(null);
   }, [animeId]);
 
-  // Load watched episodes
-  useEffect(() => {
-    const saved = localStorage.getItem(`watchedEpisodes_${animeId}`);
-    if (saved) setWatchedEpisodes(new Set(JSON.parse(saved)));
-    else setWatchedEpisodes(new Set());
-  }, [animeId]);
 
   // Translate synopsis
   useEffect(() => {
