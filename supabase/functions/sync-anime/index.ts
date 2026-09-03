@@ -269,18 +269,51 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 1. Fetch from AniList
-    const startMedia = await fetchAniListMedia(anilist_id);
+    // 1. Fetch from AniList (may be unavailable — the API is occasionally disabled)
+    let startMedia = await fetchAniListMedia(anilist_id);
+    let anilistAvailable = true;
+
     if (!startMedia) {
-      return new Response(JSON.stringify({ error: "Anime not found on AniList" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // Fallback: build the media object from the catalog row we already have,
+      // so TMDB can still deliver seasons, episodes, artwork and providers.
+      anilistAvailable = false;
+      const { data: localSeries } = await supabase
+        .from("series")
+        .select("anilist_id, title, title_en, title_jp, cover_image, description, genres, status, format, episodes:episode_count, year")
+        .eq("anilist_id", anilist_id)
+        .maybeSingle();
+
+      if (!localSeries) {
+        return new Response(JSON.stringify({ error: "Anime not found on AniList" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      startMedia = {
+        id: localSeries.anilist_id,
+        title: {
+          romaji: localSeries.title,
+          english: localSeries.title_en ?? null,
+          native: localSeries.title_jp ?? null,
+        },
+        coverImage: localSeries.cover_image ? { extraLarge: localSeries.cover_image, large: localSeries.cover_image } : null,
+        description: localSeries.description ?? null,
+        genres: localSeries.genres ?? [],
+        status: localSeries.status ?? "unknown",
+        format: localSeries.format ?? "TV",
+        episodes: localSeries.episodes ?? null,
+        startDate: localSeries.year ? { year: localSeries.year, month: null, day: null } : null,
+        endDate: null,
+        trailer: null,
+        relations: null,
+      };
     }
 
-    // 2. Collect all related seasons via BFS
-    const allSeasons = await collectSeries(startMedia);
+    // 2. Collect all related seasons via BFS (only possible with AniList relations)
+    const allSeasons = anilistAvailable ? await collectSeries(startMedia) : [];
     if (allSeasons.length === 0) {
-      // Movies, OVAs and specials have no TV chain — treat the entry itself as a single season
+      // Movies, OVAs, specials — or AniList offline — treat the entry itself as a single season
       allSeasons.push(startMedia);
     }
+
 
 
     // 3. Use the first season as the "series" identity
