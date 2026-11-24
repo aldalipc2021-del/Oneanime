@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable/index";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -11,20 +11,22 @@ export const GoogleSignInButton = () => {
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/`,
-        },
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
       });
 
-      if (error) {
+      if (result.error) {
+        const msg = String(result.error.message || result.error);
         toast({
-          title: "Fehler bei Google-Anmeldung",
-          description: error.message,
+          title: "Google-Anmeldung fehlgeschlagen",
+          description: /popup|closed|cancel/i.test(msg)
+            ? "Das Anmeldefenster wurde geschlossen. Bitte versuche es erneut."
+            : "Die Anmeldung mit Google konnte nicht abgeschlossen werden. Bitte versuche es erneut oder nutze E-Mail und Passwort.",
           variant: "destructive",
         });
+        return;
       }
+      if (result.redirected) return;
     } catch (error) {
       toast({
         title: "Fehler",
