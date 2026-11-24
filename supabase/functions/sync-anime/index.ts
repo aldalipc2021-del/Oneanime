@@ -164,7 +164,29 @@ async function tmdbShowInfo(showId: number, tmdbKey: string) {
     title_de: de?.name || null,
     description_de: de?.overview || null,
     description_en: en?.overview || null,
+    tmdb_status: (en?.status as string) || null,
+    last_air_date: (en?.last_episode_to_air?.air_date as string) || null,
+    next_air_date: (en?.next_episode_to_air?.air_date as string) || null,
   };
+}
+
+// "releasing" from AniList/catalog can be stale (snapshot taken while a season aired).
+// Re-check with TMDB: only keep "releasing" when an episode aired recently or airs soon.
+// A finished season with a planned next season becomes "hiatus" (series continues), not "finished".
+function correctAiringStatus(
+  current: string,
+  info: { tmdb_status: string | null; last_air_date: string | null; next_air_date: string | null } | null,
+): string {
+  if (current !== "releasing" || !info) return current;
+  const DAY = 86400000;
+  const now = Date.now();
+  const last = info.last_air_date ? Date.parse(info.last_air_date) : NaN;
+  const next = info.next_air_date ? Date.parse(info.next_air_date) : NaN;
+  if (!isNaN(next) && next - now <= 14 * DAY) return "releasing";
+  if (!isNaN(last) && now - last <= 10 * DAY) return "releasing";
+  if (isNaN(last) && isNaN(next)) return current; // no usable TMDB data
+  if (info.tmdb_status === "Ended" || info.tmdb_status === "Canceled") return "finished";
+  return "hiatus";
 }
 
 // Watch providers per country (flatrate / rent / buy)
@@ -255,7 +277,29 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { anilist_id } = await req.json();
+    const body = await req.json();
+    const { anilist_id } = body;
+
+    // Maintenance mode: re-check stale "releasing" series against TMDB airing data
+    if (body.refresh_status === true) {
+      const key = Deno.env.get("TMDB_API_KEY");
+      if (!key) return new Response(JSON.stringify({ error: "TMDB_API_KEY not configured" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const { data: rows } = await sb.from("series").select("id, title, title_en, year, tmdb_id").eq("status", "releasing").limit(200);
+      const changes: Record<string, number> = {};
+      for (const r of rows || []) {
+        const tmdbId = r.tmdb_id ?? (await resolveTmdbShowId(r.title_en || r.title, null, key));
+        if (!tmdbId) continue;
+        const next = correctAiringStatus("releasing", await tmdbShowInfo(tmdbId, key));
+        if (next !== "releasing") {
+          await sb.from("series").update({ status: next }).eq("id", r.id);
+          await sb.from("seasons").update({ status: next }).eq("series_id", r.id).eq("status", "releasing");
+          changes[next] = (changes[next] || 0) + 1;
+        }
+      }
+      return new Response(JSON.stringify({ checked: rows?.length || 0, changes }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     if (!anilist_id || typeof anilist_id !== "number") {
       return new Response(JSON.stringify({ error: "anilist_id (number) is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -341,7 +385,11 @@ Deno.serve(async (req) => {
           cover_image: first.coverImage?.extraLarge || first.coverImage?.large || null,
           description: first.description?.replace(/<[^>]*>/g, "") || null,
           genres: allGenres,
-          status: first.status?.toLowerCase() || "unknown",
+          status: correctAiringStatus(
+            first.status?.toLowerCase() || "unknown",
+            // only the latest season decides whether the series is airing right now
+            allSeasons[allSeasons.length - 1] === first ? seriesTmdbInfo : null,
+          ),
           tmdb_id: seriesTmdbId,
           backdrop_image: seriesTmdbInfo?.backdrop_image || null,
           poster_image: seriesTmdbInfo?.poster_image || null,
@@ -423,7 +471,7 @@ Deno.serve(async (req) => {
             aired_to: dateFromAniList(s.endDate),
             cover_image: s.coverImage?.extraLarge || s.coverImage?.large || null,
             trailer_url: trailerUrl(s.trailer),
-            status: s.status?.toLowerCase() || "unknown",
+            status: correctAiringStatus(s.status?.toLowerCase() || "unknown", seasonTmdbInfo),
             tmdb_id: seasonTmdbId,
             backdrop_image: seasonTmdbInfo?.backdrop_image || null,
             title_de: seasonTmdbInfo?.title_de || null,

@@ -20,6 +20,7 @@ export const AnimeCard = forwardRef<HTMLAnchorElement, AnimeCardProps>(
       "Currently Airing": "Laufend",
       "Finished Airing": "Abgeschlossen",
       "Not yet aired": "Bald",
+      "On Hiatus": "Staffelpause",
     };
 
     return (
